@@ -525,10 +525,21 @@ const HISTORICAL_DATA = [{"data": "2026-01-02", "vazao_eb": 3792.0, "ph_eb": 8.1
 
 // ─── STATE ───────────────────────────────────────────────────────────
 let sessionData = [...HISTORICAL_DATA];
-let supabaseConfig = {url: https://maljtjznorewdntctaub.supabase.co, key:sb_publishable_IfWeqaaqqBFA7aPuSNe_HA_xhAchEob};
+let supabaseConfig = {url: 'https://maljtjznorewdntctaub.supabase.co', key: 'sb_publishable_IfWeqaaqqBFA7aPuSNe_HA_xhAchEob'};
 try {
   const sb = localStorage.getItem('sb_config');
   if(sb) supabaseConfig = JSON.parse(sb);
+  // Carrega dados do Supabase salvos no sessionStorage (após reload)
+  const sbData = sessionStorage.getItem('sb_data');
+  if(sbData) {
+    const dados = JSON.parse(sbData);
+    dados.forEach(r => {
+      const idx = sessionData.findIndex(x => x.data === r.data);
+      if(idx >= 0) sessionData[idx] = {...sessionData[idx], ...r};
+      else sessionData.push(r);
+    });
+    sessionData.sort((a,b) => a.data.localeCompare(b.data));
+  }
   const sd = localStorage.getItem('session_data');
   if(sd) {
     const extra = JSON.parse(sd);
@@ -591,6 +602,9 @@ const latest = getLatest();
 document.getElementById('last-update').textContent = latest.data
   ? 'Último dado: ' + new Date(latest.data + 'T00:00:00').toLocaleDateString('pt-BR')
   : '';
+
+// Carrega dados do Supabase ao abrir a página
+carregarDadosSupabase();
 
 // ─── ALERTS BAR ──────────────────────────────────────────────────────
 function renderAlerts() {
@@ -972,6 +986,33 @@ function loadSupabaseUI() {
   document.getElementById('sb-key').value = supabaseConfig.key || '';
 }
 loadSupabaseUI();
+
+async function carregarDadosSupabase() {
+  if(!supabaseConfig.url || !supabaseConfig.key) return;
+  // Evita loop de reload
+  if(sessionStorage.getItem('sb_loaded')) return;
+  try {
+    const res = await fetch(
+      supabaseConfig.url + '/rest/v1/monitoramento_ete?select=*&order=data.asc&limit=1000',
+      { headers: { 'apikey': supabaseConfig.key, 'Authorization': 'Bearer ' + supabaseConfig.key } }
+    );
+    if(!res.ok) return;
+    const dados = await res.json();
+    if(!Array.isArray(dados) || dados.length === 0) return;
+    // Verifica se há dados novos além do histórico embutido
+    const temNovos = dados.some(r => !HISTORICAL_DATA.find(h => h.data === r.data));
+    const historicoAtualizado = dados.some(r => {
+      const h = HISTORICAL_DATA.find(x => x.data === r.data);
+      return h && JSON.stringify(h) !== JSON.stringify({...h, ...r});
+    });
+    if(temNovos || historicoAtualizado) {
+      // Salva dados do Supabase no sessionStorage e recarrega
+      sessionStorage.setItem('sb_loaded', '1');
+      sessionStorage.setItem('sb_data', JSON.stringify(dados));
+      location.reload();
+    }
+  } catch(e) { console.warn('Supabase load error:', e); }
+}
 
 async function testSupabase() {
   const url = document.getElementById('sb-url').value.trim().replace(/\/$/,'');
