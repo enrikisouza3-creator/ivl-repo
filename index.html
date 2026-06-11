@@ -272,7 +272,7 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 <body>
 
 <header>
-  <div class="logo">🧫</div>
+  <div class="logo"></div>
   <div>
     <h1>ETE Danone — Monitoramento Biológico</h1>
     <div style="font-size:0.76rem;color:var(--muted);">Painel de Controle do Processo</div>
@@ -284,10 +284,10 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 </header>
 
 <nav>
-  <button class="active" onclick="setTab('dashboard')">📊 Painel</button>
-  <button onclick="setTab('indicadores')">🧪 Indicadores-Chave</button>
-  <button onclick="setTab('historico')">📋 Histórico</button>
-  <button onclick="setTab('lancamento')">➕ Lançamento</button>
+  <button class="active" onclick="setTab('dashboard')"> Painel</button>
+  <button onclick="setTab('indicadores')">Indicadores-Chave</button>
+  <button onclick="setTab('historico')"> Histórico</button>
+  <button onclick="setTab('lancamento')"> Lançamento</button>
 
 </nav>
 
@@ -525,7 +525,7 @@ const HISTORICAL_DATA = [{"data": "2026-01-02", "vazao_eb": 3792.0, "ph_eb": 8.1
 
 // ─── STATE ───────────────────────────────────────────────────────────
 let sessionData = [...HISTORICAL_DATA];
-let supabaseConfig = {url: '', key: ''};
+let supabaseConfig = {url: https://maljtjznorewdntctaub.supabase.co, key:sb_publishable_IfWeqaaqqBFA7aPuSNe_HA_xhAchEob};
 try {
   const sb = localStorage.getItem('sb_config');
   if(sb) supabaseConfig = JSON.parse(sb);
