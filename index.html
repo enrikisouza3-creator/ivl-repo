@@ -298,37 +298,37 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 
   <div class="kpi-grid" id="kpi-grid"></div>
 
-  <div class="section-title">📈 Tendências — Últimos 30 dias</div>
+  <div class="section-title"> Tendências — Últimos 30 dias</div>
 
   <div class="charts-grid">
     <div class="chart-card">
-      <div class="chart-title">💧 IVL (Índice Volumétrico de Lodo)</div>
+      <div class="chart-title">IVL (Índice Volumétrico de Lodo)</div>
       <div class="chart-meta">Meta: &lt;150 mL/g — Limite crítico: 200 mL/g</div>
       <div class="chart-canvas-wrap"><canvas id="chartIVL"></canvas></div>
     </div>
     <div class="chart-card">
-      <div class="chart-title">⏱️ Idade do Lodo</div>
+      <div class="chart-title">Idade do Lodo</div>
       <div class="chart-meta">Faixa ideal: 18–30 dias</div>
       <div class="chart-canvas-wrap"><canvas id="chartIdade"></canvas></div>
     </div>
     <div class="chart-card">
-      <div class="chart-title">🧱 SST — Sólidos em Suspensão</div>
+      <div class="chart-title">SST — Sólidos em Suspensão</div>
       <div class="chart-meta">SST Tanque (mg/L) · SST Efluente meta &lt;100 mg/L</div>
       <div class="chart-canvas-wrap"><canvas id="chartSST"></canvas></div>
     </div>
     <div class="chart-card">
-      <div class="chart-title">🔬 DQO — Saída Decantador</div>
+      <div class="chart-title"> DQO — Saída Decantador</div>
       <div class="chart-meta">Meta: &lt;180 mg/L</div>
       <div class="chart-canvas-wrap"><canvas id="chartDQO"></canvas></div>
     </div>
     <div class="chart-card full">
-      <div class="chart-title">💦 Vazão Efluente Bruto (m³/dia) + DQO Entrada (kg/dia)</div>
+      <div class="chart-title"> Vazão Efluente Bruto (m³/dia) + DQO Entrada (kg/dia)</div>
       <div class="chart-meta">Dois eixos — barras = vazão · linha = carga orgânica</div>
       <div class="chart-canvas-wrap" style="height:240px;"><canvas id="chartVazao"></canvas></div>
     </div>
   </div>
 
-  <div class="section-title">🎯 Medidores — Último Registro</div>
+  <div class="section-title"> Medidores — Último Registro</div>
   <div class="gauge-grid">
     <div class="gauge-card">
       <div class="gauge-title">IVL (mL/g)</div>
@@ -357,25 +357,25 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 
 <!-- ===== TAB: INDICADORES ===== -->
 <div id="tab-indicadores" class="tab-content dash">
-  <div class="section-title">🧪 Série Histórica dos Indicadores Biológicos</div>
+  <div class="section-title"> Série Histórica dos Indicadores Biológicos</div>
   <div class="charts-grid">
     <div class="chart-card full">
-      <div class="chart-title">📊 IVL — Série Completa (Jan–Jun 2026)</div>
+      <div class="chart-title"> IVL — Série Completa (Jan–Jun 2026)</div>
       <div class="chart-meta">Linha verde = meta 150 mL/g · Linha vermelha = limite 200 mL/g</div>
       <div class="chart-canvas-wrap" style="height:280px;"><canvas id="chartIVLFull"></canvas></div>
     </div>
     <div class="chart-card full">
-      <div class="chart-title">🧱 SST Tanque de Nitrificação (mg/L)</div>
+      <div class="chart-title"> SST Tanque de Nitrificação (mg/L)</div>
       <div class="chart-meta">Sólidos suspensos totais no tanque biológico</div>
       <div class="chart-canvas-wrap" style="height:260px;"><canvas id="chartSSTFull"></canvas></div>
     </div>
     <div class="chart-card">
-      <div class="chart-title">🌡️ SS Proveta (mL/L)</div>
+      <div class="chart-title"> SS Proveta (mL/L)</div>
       <div class="chart-meta">Volume de lodo sedimentado em 30 min</div>
       <div class="chart-canvas-wrap"><canvas id="chartSSProv"></canvas></div>
     </div>
     <div class="chart-card">
-      <div class="chart-title">📉 DQO Saída vs SST Efluente</div>
+      <div class="chart-title"> DQO Saída vs SST Efluente</div>
       <div class="chart-meta">DQO meta &lt;180 · SST efluente meta &lt;100 mg/L</div>
       <div class="chart-canvas-wrap"><canvas id="chartDQOSST"></canvas></div>
     </div>
@@ -389,7 +389,7 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 
 <!-- ===== TAB: HISTORICO ===== -->
 <div id="tab-historico" class="tab-content dash">
-  <div class="section-title">📋 Histórico de Dados — Jan/Jun 2026</div>
+  <div class="section-title">Histórico de Dados — Jan/Jun 2026</div>
   <div class="filter-bar">
     <label>Período: de</label>
     <input type="date" id="filt-de" value="2026-01-01">
@@ -426,7 +426,7 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 
 <!-- ===== TAB: LANCAMENTO ===== -->
 <div id="tab-lancamento" class="tab-content dash">
-  <div class="section-title">➕ Novo Lançamento Diário</div>
+  <div class="section-title"> Novo Lançamento Diário</div>
   <div class="form-wrap">
     <div class="form-grid">
       <div class="form-group" style="grid-column:1/-1;">
@@ -434,22 +434,22 @@ tr:hover td{background:rgba(255,255,255,0.02);}
         <input type="date" id="f-data" required>
       </div>
 
-      <div class="form-section-label">💦 Efluente Bruto</div>
+      <div class="form-section-label"> Efluente Bruto</div>
       <div class="form-group"><label>Vazão EB (m³/dia)</label><input type="number" id="f-vazao_eb" step="0.1" placeholder="ex: 3500"></div>
       <div class="form-group"><label>pH EB</label><input type="number" id="f-ph_eb" step="0.01" placeholder="ex: 7.5"></div>
       <div class="form-group"><label>DQO EB Composta (mg/L)</label><input type="number" id="f-dqo_eb_mg" step="1" placeholder="ex: 3000"></div>
       <div class="form-group"><label>DQO EB Calc. (kg/dia)</label><input type="number" id="f-dqo_eb_kg" step="0.01" placeholder="ex: 10500"></div>
 
-      <div class="form-section-label">⚗️ Equalização / MAB</div>
+      <div class="form-section-label"> Equalização / MAB</div>
       <div class="form-group"><label>Vazão Equalizado (m³/dia)</label><input type="number" id="f-vazao_eq" step="0.1"></div>
       <div class="form-group"><label>SST MAB1 (mg/L)</label><input type="number" id="f-sst_mab1" step="1"></div>
       <div class="form-group"><label>SST MAB2 (mg/L)</label><input type="number" id="f-sst_mab2" step="1"></div>
 
-      <div class="form-section-label">🏭 Flotador</div>
+      <div class="form-section-label"> Flotador</div>
       <div class="form-group"><label>pH Tanque Neutralização</label><input type="number" id="f-ph_flotador" step="0.01"></div>
       <div class="form-group"><label>DQO Flotador (mg/L)</label><input type="number" id="f-dqo_flotador" step="1"></div>
 
-      <div class="form-section-label">🧫 Tanque de Nitrificação (Indicadores Biológicos)</div>
+      <div class="form-section-label"> Tanque de Nitrificação (Indicadores Biológicos)</div>
       <div class="form-group"><label>SST Tanque (mg/L) *</label><input type="number" id="f-sst_tanque" step="1" placeholder="ex: 5500"></div>
       <div class="form-group"><label>SS Proveta (mL/L) *</label><input type="number" id="f-ss_proveta" step="1" placeholder="ex: 970"></div>
       <div class="form-group"><label>IVL — calculado auto</label><input type="number" id="f-ivl_calc" step="0.1" placeholder="automático" readonly style="opacity:0.6;"></div>
@@ -457,14 +457,14 @@ tr:hover td{background:rgba(255,255,255,0.02);}
       <div class="form-group"><label>Idade do Lodo (dias)</label><input type="number" id="f-idade_lodo" step="0.1" placeholder="ex: 22"></div>
       <div class="form-group"><label>Relação A/M</label><input type="number" id="f-relacao_am" step="0.001" placeholder="ex: 0.12"></div>
 
-      <div class="form-section-label">📤 Saída Decantador</div>
+      <div class="form-section-label"> Saída Decantador</div>
       <div class="form-group"><label>DQO Saída (mg/L)</label><input type="number" id="f-dqo_saida" step="1" placeholder="meta &lt;180"></div>
       <div class="form-group"><label>SST Efluente (mg/L)</label><input type="number" id="f-sst_efluente" step="1" placeholder="meta &lt;100"></div>
       <div class="form-group"><label>Eficiência DQO Flotador (%)</label><input type="number" id="f-efic_dqo_flot" step="0.1"></div>
       <div class="form-group"><label>Eficiência DQO Total (%)</label><input type="number" id="f-efic_dqo_total" step="0.1"></div>
     </div>
     <div class="form-actions">
-      <button class="btn" onclick="submitForm()">💾 Salvar Registro</button>
+      <button class="btn" onclick="submitForm()"> Salvar Registro</button>
       <button class="btn-secondary" onclick="clearForm()">🗑️ Limpar</button>
       <span id="form-feedback" style="font-size:0.8rem;"></span>
     </div>
@@ -553,28 +553,28 @@ function getLatest() {
 
 function statusIVL(v) {
   if(v == null) return {cls:'', txt:'—'};
-  if(v <= 150) return {cls:'ok', txt:'✅ OK'};
-  if(v <= 200) return {cls:'warn', txt:'⚠️ Alto'};
-  return {cls:'danger', txt:'🚨 Crítico'};
+  if(v <= 150) return {cls:'ok', txt:' OK'};
+  if(v <= 200) return {cls:'warn', txt:' Alto'};
+  return {cls:'danger', txt:' Crítico'};
 }
 function statusIdade(v) {
   if(v == null) return {cls:'', txt:'—'};
   const n = parseFloat(v);
-  if(n >= 18 && n <= 30) return {cls:'ok', txt:'✅ Ideal'};
-  if(n < 18) return {cls:'warn', txt:'⚠️ Baixo'};
-  return {cls:'warn', txt:'⚠️ Alto'};
+  if(n >= 18 && n <= 30) return {cls:'ok', txt:' Ideal'};
+  if(n < 18) return {cls:'warn', txt:' Baixo'};
+  return {cls:'warn', txt:'Alto'};
 }
 function statusDQO(v) {
   if(v == null) return {cls:'', txt:'—'};
-  if(v <= 180) return {cls:'ok', txt:'✅ OK'};
-  if(v <= 220) return {cls:'warn', txt:'⚠️ Limite'};
-  return {cls:'danger', txt:'🚨 Alto'};
+  if(v <= 180) return {cls:'ok', txt:' OK'};
+  if(v <= 220) return {cls:'warn', txt:' Limite'};
+  return {cls:'danger', txt:' Alto'};
 }
 function statusSST(v) {
   if(v == null) return {cls:'', txt:'—'};
-  if(v <= 100) return {cls:'ok', txt:'✅ OK'};
-  if(v <= 150) return {cls:'warn', txt:'⚠️ Limite'};
-  return {cls:'danger', txt:'🚨 Alto'};
+  if(v <= 100) return {cls:'ok', txt:' OK'};
+  if(v <= 150) return {cls:'warn', txt:' Limite'};
+  return {cls:'danger', txt:' Alto'};
 }
 
 // ─── TABS ────────────────────────────────────────────────────────────
