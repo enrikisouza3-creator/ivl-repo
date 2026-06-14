@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ETE Danone — Painel de Monitoramento</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
 
@@ -267,7 +269,41 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 }
 .filter-bar label{font-size:0.78rem;color:var(--muted);}
 
-/* RESPONSIVE */
+/* CHART SCROLL WRAPPER */
+.chart-scroll-wrap {
+  position:relative;
+}
+.chart-scroll-bar {
+  width:100%;
+  height:6px;
+  -webkit-appearance:none;
+  appearance:none;
+  background:var(--border);
+  border-radius:3px;
+  outline:none;
+  cursor:pointer;
+  margin-top:10px;
+  accent-color:var(--accent);
+}
+.chart-scroll-bar::-webkit-slider-thumb {
+  -webkit-appearance:none;
+  width:40px;
+  height:6px;
+  border-radius:3px;
+  background:var(--accent);
+  cursor:grab;
+}
+.chart-scroll-bar:active::-webkit-slider-thumb { cursor:grabbing; }
+.chart-reset-btn {
+  position:absolute;
+  top:6px;right:6px;
+  background:var(--panel2);border:1px solid var(--border);
+  color:var(--muted);border-radius:6px;padding:2px 8px;
+  font-size:0.68rem;cursor:pointer;z-index:2;
+  transition:all 0.15s;
+}
+.chart-reset-btn:hover { color:var(--accent);border-color:var(--accent); }
+
 @media(max-width:900px){
   .charts-grid{grid-template-columns:1fr;}
   .gauge-grid{grid-template-columns:1fr 1fr;}
@@ -310,14 +346,42 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 
   <div class="kpi-grid" id="kpi-grid"></div>
 
-  <div class="filter-bar" id="dash-filter-bar" style="margin-bottom:0;">
-    <label>Período: de</label>
-    <input type="date" id="dash-de" value="2026-01-01" onchange="renderDashCharts()">
-    <label>até</label>
-    <input type="date" id="dash-ate" value="2026-06-14" onchange="renderDashCharts()">
-    <button class="btn-secondary" style="padding:8px 16px;" onclick="renderDashCharts()">Filtrar</button>
-    <span id="dash-filter-info" style="font-size:0.76rem;color:var(--muted);"></span>
+  <!-- SLIDER DE PERÍODO -->
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px 24px 14px;margin-bottom:20px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <span style="font-size:0.78rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;">Período</span>
+      <span id="dash-filter-info" style="font-size:0.78rem;color:var(--accent);font-weight:600;"></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span id="slider-label-de" style="font-size:0.8rem;color:var(--text);font-weight:600;min-width:52px;">Jan/26</span>
+      <div style="position:relative;flex:1;height:36px;display:flex;align-items:center;">
+        <!-- Track -->
+        <div style="position:absolute;left:0;right:0;height:4px;background:var(--border);border-radius:2px;"></div>
+        <!-- Active track -->
+        <div id="slider-track-active" style="position:absolute;height:4px;background:var(--accent);border-radius:2px;left:0%;right:0%;"></div>
+        <!-- Slider DE -->
+        <input type="range" id="slider-de" min="0" max="163" value="0" step="1"
+          style="position:absolute;width:100%;height:4px;opacity:0;cursor:pointer;z-index:3;pointer-events:none;"
+          oninput="onSliderChange()">
+        <!-- Slider ATE -->
+        <input type="range" id="slider-ate" min="0" max="163" value="163" step="1"
+          style="position:absolute;width:100%;height:4px;opacity:0;cursor:pointer;z-index:4;pointer-events:none;"
+          oninput="onSliderChange()">
+        <!-- Thumb DE (visual) -->
+        <div id="thumb-de" style="position:absolute;width:18px;height:18px;background:var(--accent);border-radius:50%;border:2px solid #fff;cursor:grab;z-index:5;transform:translateX(-50%);box-shadow:0 2px 8px rgba(0,212,170,0.4);left:0%;top:50%;margin-top:-9px;"></div>
+        <!-- Thumb ATE (visual) -->
+        <div id="thumb-ate" style="position:absolute;width:18px;height:18px;background:var(--accent);border-radius:50%;border:2px solid #fff;cursor:grab;z-index:5;transform:translateX(-50%);box-shadow:0 2px 8px rgba(0,212,170,0.4);left:100%;top:50%;margin-top:-9px;"></div>
+      </div>
+      <span id="slider-label-ate" style="font-size:0.8rem;color:var(--text);font-weight:600;min-width:52px;text-align:right;">Jun/26</span>
+    </div>
+    <!-- Mini timeline labels -->
+    <div style="display:flex;justify-content:space-between;padding:4px 0 0;font-size:0.68rem;color:var(--muted);user-select:none;">
+      <span>Jan</span><span>Fev</span><span>Mar</span><span>Abr</span><span>Mai</span><span>Jun</span>
+    </div>
   </div>
+  <!-- inputs ocultos usados pelo renderDashCharts -->
+  <input type="date" id="dash-de"  value="2026-01-01" style="display:none">
+  <input type="date" id="dash-ate" value="2026-06-14" style="display:none">
 
   <div class="section-title"> Tendências — Período selecionado</div>
 
@@ -859,24 +923,99 @@ const TOOLTIP = {
   callbacks: {}
 };
 
+// Janela padrão visível (dias)
+const WINDOW_DAYS = 30;
+
 function makeLineChart(id, labels, datasets, yLabel='', extraOpts={}) {
   const ctx = document.getElementById(id)?.getContext('2d');
   if(!ctx) return;
-  return new Chart(ctx, {
+
+  const totalPts = labels.length;
+  // Mostra últimos WINDOW_DAYS pontos por padrão (ou todos se menor)
+  const winSize = Math.min(WINDOW_DAYS, totalPts);
+  const initMin = Math.max(0, totalPts - winSize);
+  const initMax = totalPts - 1;
+
+  const chart = new Chart(ctx, {
     type:'line',
     data:{labels, datasets},
     options:{
-      responsive:true,maintainAspectRatio:false,
-      interaction:{mode:'index',intersect:false},
-      plugins:{legend:{labels:{color:'#8b949e',font:{size:11},boxWidth:12,padding:12}},tooltip:TOOLTIP},
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      plugins:{
+        legend:{labels:{color:'#8b949e',font:{size:11},boxWidth:12,padding:12}},
+        tooltip:TOOLTIP,
+        zoom:{
+          pan:{
+            enabled:true,
+            mode:'x',
+            onPan({chart}) { syncScrollbar(chart, id); }
+          },
+          zoom:{
+            wheel:{enabled:true},
+            pinch:{enabled:true},
+            mode:'x',
+            onZoom({chart}) { syncScrollbar(chart, id); }
+          }
+        }
+      },
       scales:{
-        x:{grid:GRID,ticks:{...TICK,maxRotation:45,maxTicksLimit:15}},
+        x:{
+          grid:GRID,
+          ticks:{...TICK, maxRotation:45, maxTicksLimit:10, includeBounds:true},
+          min: initMin,
+          max: initMax
+        },
         y:{grid:GRID,ticks:TICK,title:{display:!!yLabel,text:yLabel,color:'#8b949e',font:{size:10}}}
       },
       ...extraOpts
     }
   });
+
+  // Cria scrollbar abaixo do canvas
+  const wrap = ctx.canvas.closest('.chart-canvas-wrap');
+  if(wrap) {
+    wrap.classList.add('chart-scroll-wrap');
+    // Remove scrollbar antiga se existir
+    wrap.querySelectorAll('.chart-scroll-bar,.chart-reset-btn').forEach(e=>e.remove());
+
+    const scrollbar = document.createElement('input');
+    scrollbar.type  = 'range';
+    scrollbar.className = 'chart-scroll-bar';
+    scrollbar.min   = 0;
+    scrollbar.max   = Math.max(0, totalPts - winSize);
+    scrollbar.value = Math.max(0, totalPts - winSize); // começa no fim (dado mais recente)
+    scrollbar.step  = 1;
+    scrollbar.addEventListener('input', () => {
+      const pos = +scrollbar.value;
+      const visibleWin = Math.round(chart.scales.x.max - chart.scales.x.min);
+      chart.zoomScale('x', {min: pos, max: Math.min(totalPts-1, pos + visibleWin)}, 'none');
+    });
+    wrap.appendChild(scrollbar);
+
+    // Botão reset
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'chart-reset-btn';
+    resetBtn.textContent = '↺ Reset';
+    resetBtn.onclick = () => {
+      chart.resetZoom();
+      chart.zoomScale('x', {min: initMin, max: initMax}, 'none');
+      scrollbar.value = initMin;
+    };
+    wrap.appendChild(resetBtn);
+  }
+
+  return chart;
 }
+
+function syncScrollbar(chart, id) {
+  const wrap = document.getElementById(id)?.closest('.chart-canvas-wrap');
+  const scrollbar = wrap?.querySelector('.chart-scroll-bar');
+  if(!scrollbar) return;
+  const {min} = chart.scales.x;
+  scrollbar.value = Math.round(min);
+}
+
 
 // ─── DASHBOARD CHARTS ─────────────────────────────────────────────────
 let dashChartInstances = {};
@@ -944,6 +1083,10 @@ function renderDashCharts() {
     const ctx = document.getElementById('chartVazao')?.getContext('2d');
     if(ctx) {
       if(dashChartInstances.vazao) { try{dashChartInstances.vazao.destroy();}catch(e){} }
+      const totalPts = labels.length;
+      const winSize  = Math.min(WINDOW_DAYS, totalPts);
+      const initMin  = Math.max(0, totalPts - winSize);
+      const initMax  = totalPts - 1;
       dashChartInstances.vazao = new Chart(ctx, {
         data:{
           labels,
@@ -957,15 +1100,40 @@ function renderDashCharts() {
         options:{
           responsive:true,maintainAspectRatio:false,
           interaction:{mode:'index',intersect:false},
-          plugins:{legend:{labels:{color:'#8b949e',font:{size:11},boxWidth:12}},tooltip:TOOLTIP},
+          plugins:{
+            legend:{labels:{color:'#8b949e',font:{size:11},boxWidth:12}},tooltip:TOOLTIP,
+            zoom:{
+              pan:{enabled:true,mode:'x',onPan({chart}){syncScrollbar(chart,'chartVazao');}},
+              zoom:{wheel:{enabled:true},pinch:{enabled:true},mode:'x',onZoom({chart}){syncScrollbar(chart,'chartVazao');}}
+            }
+          },
           scales:{
-            x:{grid:GRID,ticks:{...TICK,maxRotation:45,maxTicksLimit:15}},
+            x:{grid:GRID,ticks:{...TICK,maxRotation:45,maxTicksLimit:10,includeBounds:true},min:initMin,max:initMax},
             y:{grid:GRID,ticks:TICK,position:'left',title:{display:true,text:'m³/dia',color:'#8b949e',font:{size:10}}},
             y2:{grid:{drawOnChartArea:false},ticks:TICK,position:'right',
               title:{display:true,text:'kg/dia',color:'#8b949e',font:{size:10}}}
           }
         }
       });
+      // Scrollbar
+      const wrap = ctx.canvas.closest('.chart-canvas-wrap');
+      if(wrap) {
+        wrap.classList.add('chart-scroll-wrap');
+        wrap.querySelectorAll('.chart-scroll-bar,.chart-reset-btn').forEach(e=>e.remove());
+        const sb = document.createElement('input');
+        sb.type='range'; sb.className='chart-scroll-bar';
+        sb.min=0; sb.max=Math.max(0,totalPts-winSize); sb.value=initMin; sb.step=1;
+        sb.addEventListener('input',()=>{
+          const pos=+sb.value;
+          const vis=Math.round(dashChartInstances.vazao.scales.x.max-dashChartInstances.vazao.scales.x.min);
+          dashChartInstances.vazao.zoomScale('x',{min:pos,max:Math.min(totalPts-1,pos+vis)},'none');
+        });
+        wrap.appendChild(sb);
+        const rb=document.createElement('button');
+        rb.className='chart-reset-btn'; rb.textContent='↺ Reset';
+        rb.onclick=()=>{ dashChartInstances.vazao.zoomScale('x',{min:initMin,max:initMax},'none'); sb.value=initMin; };
+        wrap.appendChild(rb);
+      }
     }
   }
 } // end renderDashCharts
@@ -1278,7 +1446,143 @@ async function testSupabase() {
   }
 }
 
-// ─── TOAST ────────────────────────────────────────────────────────────
+// ─── RANGE SLIDER ────────────────────────────────────────────────────
+(function() {
+  // Todas as datas disponíveis em ordem
+  const ALL_DATES = [...new Set(
+    sessionData
+      .filter(r => r.vazao_eb != null || r.sst_tanque != null)
+      .map(r => r.data)
+  )].sort();
+
+  const MAX_IDX = ALL_DATES.length - 1;
+  let idxDe  = 0;
+  let idxAte = MAX_IDX;
+
+  // Atualiza os sliders nativos e os thumbs visuais
+  function updateSliders() {
+    const sliderDe  = document.getElementById('slider-de');
+    const sliderAte = document.getElementById('slider-ate');
+    if(!sliderDe || !sliderAte) return;
+    sliderDe.max  = MAX_IDX;
+    sliderAte.max = MAX_IDX;
+    sliderDe.value  = idxDe;
+    sliderAte.value = idxAte;
+    syncVisuals();
+  }
+
+  function syncVisuals() {
+    const pDe  = (idxDe  / MAX_IDX) * 100;
+    const pAte = (idxAte / MAX_IDX) * 100;
+
+    const tDe  = document.getElementById('thumb-de');
+    const tAte = document.getElementById('thumb-ate');
+    const track = document.getElementById('slider-track-active');
+    const lblDe  = document.getElementById('slider-label-de');
+    const lblAte = document.getElementById('slider-label-ate');
+
+    if(tDe)   tDe.style.left  = pDe  + '%';
+    if(tAte)  tAte.style.left = pAte + '%';
+    if(track) { track.style.left = pDe + '%'; track.style.right = (100 - pAte) + '%'; }
+
+    const dateDe  = ALL_DATES[idxDe];
+    const dateAte = ALL_DATES[idxAte];
+
+    if(lblDe && dateDe)   lblDe.textContent  = fmtSliderLabel(dateDe);
+    if(lblAte && dateAte) lblAte.textContent = fmtSliderLabel(dateAte);
+
+    // Sincroniza inputs ocultos e re-renderiza
+    const de  = document.getElementById('dash-de');
+    const ate = document.getElementById('dash-ate');
+    if(de)  de.value  = dateDe  || '';
+    if(ate) ate.value = dateAte || '';
+  }
+
+  function fmtSliderLabel(d) {
+    if(!d) return '';
+    const [y, m, day] = d.split('-');
+    const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    return `${day}/${meses[+m-1]}`;
+  }
+
+  // Chamado pelos inputs range (opacidade 0, sobrepostos)
+  window.onSliderChange = function() {
+    const sliderDe  = document.getElementById('slider-de');
+    const sliderAte = document.getElementById('slider-ate');
+    let vDe  = +sliderDe.value;
+    let vAte = +sliderAte.value;
+    // Evita cruzamento
+    if(vDe > vAte) { vDe = vAte; sliderDe.value = vDe; }
+    idxDe  = vDe;
+    idxAte = vAte;
+    syncVisuals();
+    // Debounce leve para não re-renderizar em cada pixel
+    clearTimeout(window._sliderTimer);
+    window._sliderTimer = setTimeout(renderDashCharts, 80);
+  };
+
+  // Drag nos thumbs visuais
+  function makeDraggable(thumbId, isAte) {
+    const thumb = document.getElementById(thumbId);
+    if(!thumb) return;
+    let dragging = false;
+
+    function getTrackRect() {
+      return document.getElementById('slider-track-active')?.parentElement?.getBoundingClientRect();
+    }
+
+    thumb.addEventListener('mousedown',  startDrag);
+    thumb.addEventListener('touchstart', startDrag, {passive:true});
+
+    function startDrag(e) {
+      dragging = true;
+      thumb.style.cursor = 'grabbing';
+      e.preventDefault?.();
+    }
+
+    document.addEventListener('mousemove', onDrag);
+    document.addEventListener('touchmove', onDrag, {passive:true});
+    document.addEventListener('mouseup',   endDrag);
+    document.addEventListener('touchend',  endDrag);
+
+    function onDrag(e) {
+      if(!dragging) return;
+      const rect = getTrackRect();
+      if(!rect) return;
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      let pct = (clientX - rect.left) / rect.width;
+      pct = Math.max(0, Math.min(1, pct));
+      let idx = Math.round(pct * MAX_IDX);
+      if(isAte) {
+        if(idx < idxDe) idx = idxDe;
+        idxAte = idx;
+        document.getElementById('slider-ate').value = idx;
+      } else {
+        if(idx > idxAte) idx = idxAte;
+        idxDe = idx;
+        document.getElementById('slider-de').value = idx;
+      }
+      syncVisuals();
+      clearTimeout(window._sliderTimer);
+      window._sliderTimer = setTimeout(renderDashCharts, 80);
+    }
+
+    function endDrag() {
+      dragging = false;
+      thumb.style.cursor = 'grab';
+    }
+  }
+
+  // Inicializa após DOM pronto
+  window.addEventListener('load', function() {
+    updateSliders();
+    makeDraggable('thumb-de',  false);
+    makeDraggable('thumb-ate', true);
+    syncVisuals();
+  });
+})();
+
+
 function showToast(msg, type='success') {
   const t = document.createElement('div');
   t.className = 'toast ' + type;
