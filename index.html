@@ -329,7 +329,7 @@ tr:hover td{background:rgba(255,255,255,0.02);}
     </div>
     <div class="chart-card">
       <div class="chart-title">Idade do Lodo</div>
-      <div class="chart-meta">Faixa ideal: 18–30 dias</div>
+      <div class="chart-meta" id="idade-meta-label">Faixa ideal: 18–30 dias</div>
       <div class="chart-canvas-wrap"><canvas id="chartIdade"></canvas></div>
     </div>
     <div class="chart-card">
@@ -903,6 +903,14 @@ function renderDashCharts() {
     borderDash:[5,5], pointRadius:0, fill:false},
    {label:`Crítico ${CFG.ivlCrit}`, data: rows.map(()=>CFG.ivlCrit), borderColor:'#ff5e57',
     borderDash:[4,4], pointRadius:0, fill:false}
+  ]);
+
+  // Idade do Lodo
+  dashChartInstances.idade = makeLineChart('chartIdade', labels,
+  [{label:'Idade do Lodo (dias)', data: rows.map(r => { const v = parseFloat(r.idade_lodo); return isNaN(v)||v<=0?null:v; }),
+    borderColor:'#a78bfa', backgroundColor:'rgba(167,139,250,0.08)', tension:0.3, fill:true, pointRadius:3, spanGaps:true},
+   {label:`Mín ${CFG.idadeMin}d`, data: rows.map(()=>CFG.idadeMin), borderColor:'#f5a623', borderDash:[5,5], pointRadius:0, fill:false},
+   {label:`Máx ${CFG.idadeMax}d`, data: rows.map(()=>CFG.idadeMax), borderColor:'#ff5e57', borderDash:[4,4], pointRadius:0, fill:false}
   ]);
 
   // Relação A/M
