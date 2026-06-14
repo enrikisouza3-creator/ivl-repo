@@ -1,1130 +1,972 @@
-<!DOCTYPE html>
+bash
+
+cat > /home/claude/build_bi.py << 'PYEOF'
+import json
+
+with open('/home/claude/dados_monitoramento.json') as f:
+    raw = json.load(f)
+
+# Clean data
+clean = []
+for r in raw:
+    nr = {}
+    for k, v in r.items():
+        if isinstance(v, float):
+            import math
+            if math.isnan(v) or math.isinf(v) or abs(v) > 1e9:
+                nr[k] = None
+            elif k == 'relacao_am' and abs(v) < 1e-5:
+                nr[k] = None
+            elif k == 'idade_lodo' and v == 0:
+                nr[k] = None
+            else:
+                nr[k] = round(v, 4)
+        else:
+            nr[k] = v
+    # drop extra fields not needed
+    clean.append(nr)
+
+data_js = "const HISTORICAL_DATA = " + json.dumps(clean, ensure_ascii=False, separators=(',',':')) + ";"
+
+html = '''<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ETE Danone — BI Operacional v2</title>
+<title>ETE Danone — BI Operacional</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
-
-:root {
-  --bg: #0d1117;
-  --panel: #161b22;
-  --panel2: #1c2330;
-  --border: #2d3748;
-  --accent: #00d4aa;
-  --accent2: #4f9cf9;
-  --accent3: #f59e42;
-  --red: #ff5e57;
-  --green: #23d160;
-  --yellow: #f5a623;
-  --text: #e6edf3;
-  --muted: #8b949e;
-  --ok: #23d160;
-  --warn: #f5a623;
-  --danger: #ff5e57;
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+:root{
+  --bg:#0b0f14;--panel:#111820;--panel2:#162030;--border:#1e2d3d;
+  --accent:#00c8a8;--accent2:#3d8ef8;--accent3:#f0a030;
+  --red:#e05050;--green:#28c868;--yellow:#e09030;
+  --text:#dce8f0;--muted:#5a7a90;
+  --ok:#28c868;--warn:#e09030;--danger:#e05050;
 }
-body.tema-claro {
-  --bg: #f4f6f9; --panel: #ffffff; --panel2: #eef1f6; --border: #d0d7e2;
-  --text: #1a202c; --muted: #5a6478; --accent: #00a884; --accent2: #2b7de9;
+body.light{
+  --bg:#f0f4f8;--panel:#ffffff;--panel2:#e8eef5;--border:#c8d8e8;
+  --text:#1a2a3a;--muted:#5a7a90;--accent:#008870;--accent2:#1a6ad0;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;}
-
-/* HEADER */
-header{background:linear-gradient(135deg,#0d2137 0%,#0a1f2e 60%,#091a27 100%);border-bottom:1px solid var(--border);padding:18px 32px;display:flex;align-items:center;gap:16px;box-shadow:0 4px 24px rgba(0,212,170,0.08);}
-.logo{width:44px;height:44px;background:linear-gradient(135deg,var(--accent),#00a37a);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0;}
-header h1{font-family:'Syne',sans-serif;font-weight:800;font-size:1.3rem;letter-spacing:-0.5px;}
-header .sub{font-size:0.78rem;color:var(--muted);margin-left:auto;}
-.dot-live{display:inline-flex;align-items:center;gap:6px;background:rgba(35,209,96,0.12);border:1px solid rgba(35,209,96,0.3);border-radius:20px;padding:4px 12px;font-size:0.72rem;color:var(--green);font-weight:600;letter-spacing:0.5px;}
-.dot-live::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 1.5s infinite;}
-@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
-
-/* TABS */
-nav{background:var(--panel);border-bottom:1px solid var(--border);display:flex;gap:0;padding:0 24px;}
-nav button{background:none;border:none;color:var(--muted);cursor:pointer;padding:14px 20px;font-family:'DM Sans',sans-serif;font-size:0.87rem;font-weight:500;border-bottom:2px solid transparent;transition:all 0.2s;white-space:nowrap;}
+body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;min-height:100vh;font-size:14px;}
+header{background:var(--panel);border-bottom:2px solid var(--accent);padding:14px 28px;display:flex;align-items:center;gap:14px;}
+.hdr-mark{width:36px;height:36px;background:var(--accent);border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:600;color:#000;font-size:13px;flex-shrink:0;}
+header h1{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:1.05rem;letter-spacing:-0.3px;}
+header .sub{font-size:0.72rem;color:var(--muted);margin-top:2px;}
+.hdr-right{margin-left:auto;display:flex;gap:10px;align-items:center;}
+.live-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(40,200,104,0.1);border:1px solid rgba(40,200,104,0.3);border-radius:3px;padding:3px 10px;font-size:0.7rem;color:var(--ok);font-family:'IBM Plex Mono',monospace;letter-spacing:0.5px;}
+.live-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--ok);animation:blink 1.4s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+.btn-sm{background:none;border:1px solid var(--border);border-radius:3px;padding:5px 12px;color:var(--muted);cursor:pointer;font-size:0.75rem;font-family:'IBM Plex Sans',sans-serif;transition:border-color .15s,color .15s;}
+.btn-sm:hover{border-color:var(--accent);color:var(--accent);}
+nav{background:var(--panel2);border-bottom:1px solid var(--border);display:flex;padding:0 28px;gap:0;overflow-x:auto;}
+nav button{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;padding:11px 18px;font-family:'IBM Plex Sans',sans-serif;font-size:0.82rem;font-weight:500;transition:color .15s,border-color .15s;white-space:nowrap;}
 nav button:hover{color:var(--text);}
 nav button.active{color:var(--accent);border-bottom-color:var(--accent);}
-.tab-content{display:none;}
-.tab-content.active{display:block;}
-.dash{padding:24px 32px;}
-
-/* FILTRO GLOBAL — CRITICAL FIX */
-.filter-global{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 20px;margin-bottom:20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
-.filter-global label{font-size:0.78rem;color:var(--muted);font-weight:600;}
-.filter-global select,.filter-global input{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.83rem;}
-.filter-active-notice{font-size:0.75rem;color:var(--accent);font-weight:600;padding:3px 10px;background:rgba(0,212,170,0.1);border-radius:10px;display:none;}
-
-/* GERENCIAL PANEL */
-.gerencial-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:20px;position:relative;overflow:hidden;}
-.gerencial-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;}
-.gerencial-card.status-ok::before{background:linear-gradient(90deg,var(--ok),#00a37a);}
-.gerencial-card.status-warn::before{background:linear-gradient(90deg,var(--warn),#e08a00);}
-.gerencial-card.status-danger::before{background:linear-gradient(90deg,var(--danger),#cc0000);}
-.gerencial-header{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
-.gerencial-icon{font-size:1.5rem;}
-.gerencial-title{font-family:'Syne',sans-serif;font-weight:700;font-size:1rem;}
-.gerencial-status-badge{margin-left:auto;padding:5px 14px;border-radius:20px;font-size:0.78rem;font-weight:700;}
-.gerencial-status-badge.ok{background:rgba(35,209,96,0.15);color:var(--ok);border:1px solid rgba(35,209,96,0.3);}
-.gerencial-status-badge.warn{background:rgba(245,166,35,0.15);color:var(--warn);border:1px solid rgba(245,166,35,0.3);}
-.gerencial-status-badge.danger{background:rgba(255,94,87,0.15);color:var(--danger);border:1px solid rgba(255,94,87,0.3);}
-.gerencial-insight{font-size:0.88rem;color:var(--muted);line-height:1.6;margin-bottom:12px;}
-.gerencial-insight strong{color:var(--text);}
-.recomendacoes{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
-.reco-chip{padding:5px 12px;border-radius:8px;font-size:0.76rem;font-weight:600;background:rgba(79,156,249,0.12);border:1px solid rgba(79,156,249,0.25);color:var(--accent2);display:flex;align-items:center;gap:5px;}
-.reco-chip.urgente{background:rgba(255,94,87,0.12);border-color:rgba(255,94,87,0.3);color:var(--danger);}
-.reco-chip.atencao{background:rgba(245,166,35,0.12);border-color:rgba(245,166,35,0.3);color:var(--warn);}
-
-/* KPI GRID */
-.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:24px;}
-.kpi{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px 20px;position:relative;overflow:hidden;}
-.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--kpi-color,var(--accent));}
-.kpi-label{font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;}
-.kpi-val{font-family:'Syne',sans-serif;font-size:2rem;font-weight:700;line-height:1;}
-.kpi-unit{font-size:0.75rem;color:var(--muted);margin-left:4px;}
-.kpi-status{display:inline-flex;align-items:center;gap:4px;font-size:0.7rem;font-weight:600;padding:2px 8px;border-radius:20px;margin-top:6px;}
-.kpi-status.ok{background:rgba(35,209,96,0.12);color:var(--ok);}
-.kpi-status.warn{background:rgba(245,166,35,0.12);color:var(--warn);}
-.kpi-status.danger{background:rgba(255,94,87,0.12);color:var(--danger);}
-.kpi-trend{font-size:0.72rem;color:var(--muted);margin-top:4px;}
-
-/* AM ALERT */
-.am-alert{background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.3);border-radius:10px;padding:10px 16px;font-size:0.78rem;color:var(--warn);margin-top:12px;display:none;}
-
-/* CHARTS GRID */
-.charts-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;margin-bottom:24px;}
-.charts-grid.three{grid-template-columns:repeat(3,1fr);}
-.chart-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;}
-.chart-card.full{grid-column:1/-1;}
-.chart-title{font-family:'Syne',sans-serif;font-weight:700;font-size:0.9rem;margin-bottom:4px;display:flex;align-items:center;gap:8px;}
-.chart-meta{font-size:0.72rem;color:var(--muted);margin-bottom:14px;}
-.chart-canvas-wrap{position:relative;height:220px;}
-
+.tab-pane{display:none;padding:22px 28px;}
+.tab-pane.active{display:block;}
+/* FILTER */
+.filter-bar{background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:10px 16px;margin-bottom:18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.filter-bar label{font-size:0.73rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;}
+.filter-bar input,.filter-bar select{background:var(--panel);border:1px solid var(--border);border-radius:3px;padding:6px 10px;color:var(--text);font-size:0.8rem;font-family:'IBM Plex Sans',sans-serif;}
+.filter-bar input:focus,.filter-bar select:focus{outline:none;border-color:var(--accent);}
+.filter-badge{font-size:0.7rem;color:var(--accent);font-family:'IBM Plex Mono',monospace;background:rgba(0,200,168,0.08);border:1px solid rgba(0,200,168,0.2);border-radius:3px;padding:2px 8px;display:none;}
 /* ALERTS */
-.alerts-bar{background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:14px 20px;margin-bottom:20px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
-.alert-chip{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:0.78rem;font-weight:600;}
-.alert-chip.ok{background:rgba(35,209,96,0.1);border:1px solid rgba(35,209,96,0.3);color:var(--ok);}
-.alert-chip.warn{background:rgba(245,166,35,0.1);border:1px solid rgba(245,166,35,0.3);color:var(--warn);}
-.alert-chip.danger{background:rgba(255,94,87,0.1);border:1px solid rgba(255,94,87,0.3);color:var(--danger);}
-
-/* SECTION TITLE */
-.section-title{font-family:'Syne',sans-serif;font-weight:700;font-size:1rem;color:var(--text);margin:24px 0 14px;display:flex;align-items:center;gap:8px;}
-.section-title::after{content:'';flex:1;height:1px;background:var(--border);}
-
-/* GAUGE */
-.gauge-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-bottom:24px;}
-.gauge-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;text-align:center;}
-.gauge-title{font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px;}
-.gauge-wrap{position:relative;height:140px;}
-.gauge-center{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);text-align:center;}
-.gauge-val{font-family:'Syne',sans-serif;font-size:1.6rem;font-weight:800;}
-.gauge-unit{font-size:0.72rem;color:var(--muted);}
-.gauge-range{font-size:0.7rem;color:var(--muted);margin-top:6px;}
-
-/* CONFIGURAÇÕES */
-.config-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:24px;max-width:800px;margin-bottom:20px;}
-.config-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;}
-.config-group{display:flex;flex-direction:column;gap:6px;}
-.config-group label{font-size:0.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;}
-.config-group input{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.88rem;}
-.config-group input:focus{outline:none;border-color:var(--accent);}
-.config-section-label{grid-column:1/-1;font-family:'Syne',sans-serif;font-weight:700;font-size:0.85rem;color:var(--accent);padding-top:8px;border-top:1px solid var(--border);margin-top:4px;}
-
-/* DATA TABLE */
-.table-wrap{background:var(--panel);border:1px solid var(--border);border-radius:14px;overflow:auto;max-height:420px;}
-table{width:100%;border-collapse:collapse;font-size:0.8rem;}
+.alert-strip{background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:10px 14px;margin-bottom:18px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.alert-strip-label{font-size:0.7rem;font-family:'IBM Plex Mono',monospace;color:var(--muted);margin-right:4px;}
+.achip{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:3px;font-size:0.73rem;font-weight:500;}
+.achip.ok{background:rgba(40,200,104,0.08);border:1px solid rgba(40,200,104,0.25);color:var(--ok);}
+.achip.warn{background:rgba(224,144,48,0.08);border:1px solid rgba(224,144,48,0.25);color:var(--warn);}
+.achip.danger{background:rgba(224,80,80,0.08);border:1px solid rgba(224,80,80,0.25);color:var(--danger);}
+.achip.neutral{background:rgba(90,122,144,0.08);border:1px solid rgba(90,122,144,0.25);color:var(--muted);}
+/* KPI */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:12px;margin-bottom:20px;}
+.kpi{background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:14px 16px;border-left:3px solid var(--kpi-c,var(--accent));}
+.kpi-lbl{font-size:0.68rem;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin-bottom:5px;}
+.kpi-val{font-family:'IBM Plex Mono',monospace;font-size:1.7rem;font-weight:600;line-height:1;}
+.kpi-unit{font-size:0.7rem;color:var(--muted);margin-left:3px;}
+.kpi-tag{display:inline-block;font-size:0.66rem;font-weight:600;padding:2px 7px;border-radius:2px;margin-top:5px;}
+.kpi-tag.ok{background:rgba(40,200,104,0.1);color:var(--ok);}
+.kpi-tag.warn{background:rgba(224,144,48,0.1);color:var(--warn);}
+.kpi-tag.danger{background:rgba(224,80,80,0.1);color:var(--danger);}
+.kpi-sub{font-size:0.68rem;color:var(--muted);margin-top:3px;}
+/* SECTION */
+.section-hdr{font-family:'IBM Plex Mono',monospace;font-size:0.78rem;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin:22px 0 12px;display:flex;align-items:center;gap:8px;}
+.section-hdr::after{content:'';flex:1;height:1px;background:var(--border);}
+/* CHARTS */
+.charts-2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:18px;}
+.charts-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px;}
+.chart-box{background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:16px;}
+.chart-box.full{grid-column:1/-1;}
+.chart-ttl{font-family:'IBM Plex Mono',monospace;font-size:0.76rem;font-weight:600;color:var(--text);margin-bottom:2px;}
+.chart-meta{font-size:0.68rem;color:var(--muted);margin-bottom:12px;}
+.chart-wrap{position:relative;height:200px;}
+.chart-wrap.tall{height:260px;}
+/* GAUGES */
+.gauge-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px;}
+.gauge-box{background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:16px;text-align:center;}
+.gauge-ttl{font-size:0.68rem;text-transform:uppercase;letter-spacing:0.7px;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin-bottom:10px;}
+.gauge-wrap{position:relative;height:110px;}
+.gauge-center{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);text-align:center;}
+.gauge-num{font-family:'IBM Plex Mono',monospace;font-size:1.35rem;font-weight:600;}
+.gauge-unit{font-size:0.66rem;color:var(--muted);}
+.gauge-lbl{font-size:0.67rem;color:var(--muted);margin-top:4px;}
+/* GERENCIAL */
+.gcard{background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:16px 18px;margin-bottom:12px;border-left:3px solid var(--gc-c,var(--border));}
+.gcard.ok{--gc-c:var(--ok);}
+.gcard.warn{--gc-c:var(--warn);}
+.gcard.danger{--gc-c:var(--danger);}
+.gcard-hdr{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.gcard-ttl{font-family:'IBM Plex Mono',monospace;font-size:0.82rem;font-weight:600;}
+.gcard-badge{margin-left:auto;font-size:0.68rem;font-weight:700;padding:2px 9px;border-radius:2px;}
+.gcard-badge.ok{background:rgba(40,200,104,0.1);color:var(--ok);}
+.gcard-badge.warn{background:rgba(224,144,48,0.1);color:var(--warn);}
+.gcard-badge.danger{background:rgba(224,80,80,0.1);color:var(--danger);}
+.gcard-txt{font-size:0.8rem;color:var(--muted);line-height:1.55;}
+.gcard-txt strong{color:var(--text);}
+.recos{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+.reco{padding:4px 10px;border-radius:2px;font-size:0.71rem;font-weight:600;background:rgba(61,142,248,0.08);border:1px solid rgba(61,142,248,0.2);color:var(--accent2);}
+.reco.urg{background:rgba(224,80,80,0.08);border-color:rgba(224,80,80,0.2);color:var(--danger);}
+.reco.attn{background:rgba(224,144,48,0.08);border-color:rgba(224,144,48,0.2);color:var(--warn);}
+/* STATS */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;}
+.stat-box{background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:14px 16px;}
+.stat-lbl{font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;font-family:'IBM Plex Mono',monospace;margin-bottom:5px;}
+.stat-val{font-family:'IBM Plex Mono',monospace;font-size:1.5rem;font-weight:600;}
+.stat-unit{font-size:0.68rem;color:var(--muted);margin-left:3px;}
+.stat-sub{font-size:0.68rem;color:var(--muted);margin-top:3px;}
+/* TABLE */
+.tbl-wrap{background:var(--panel);border:1px solid var(--border);border-radius:4px;overflow:auto;max-height:400px;}
+table{width:100%;border-collapse:collapse;font-size:0.76rem;}
 thead tr{background:var(--panel2);position:sticky;top:0;z-index:2;}
-th{padding:10px 14px;text-align:left;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);white-space:nowrap;}
-td{padding:9px 14px;border-top:1px solid var(--border);white-space:nowrap;}
+th{padding:8px 12px;text-align:left;font-size:0.66rem;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);white-space:nowrap;font-family:'IBM Plex Mono',monospace;}
+td{padding:7px 12px;border-top:1px solid var(--border);white-space:nowrap;font-family:'IBM Plex Mono',monospace;}
 tr:hover td{background:rgba(255,255,255,0.02);}
-.cell-ok{color:var(--ok);font-weight:600;}.cell-warn{color:var(--warn);font-weight:600;}.cell-danger{color:var(--danger);font-weight:600;}
-.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;font-size:0.7rem;font-weight:700;}
-.badge.ok{background:rgba(35,209,96,0.12);color:var(--ok);}
-.badge.warn{background:rgba(245,166,35,0.12);color:var(--warn);}
-.badge.danger{background:rgba(255,94,87,0.12);color:var(--danger);}
-
+.c-ok{color:var(--ok);}.c-warn{color:var(--warn);}.c-danger{color:var(--danger);}
+.badge{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:2px;font-size:0.66rem;font-weight:700;}
+.badge.ok{background:rgba(40,200,104,0.1);color:var(--ok);}
+.badge.warn{background:rgba(224,144,48,0.1);color:var(--warn);}
+.badge.danger{background:rgba(224,80,80,0.1);color:var(--danger);}
 /* FORM */
-.form-wrap{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:28px;max-width:900px;}
-.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;}
-.form-group{display:flex;flex-direction:column;gap:6px;}
-.form-group label{font-size:0.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;}
-.form-group input,.form-group select{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.88rem;transition:border-color 0.2s;}
-.form-group input:focus,.form-group select:focus{outline:none;border-color:var(--accent);}
-.form-section-label{grid-column:1/-1;font-family:'Syne',sans-serif;font-weight:700;font-size:0.85rem;color:var(--accent);padding-top:8px;border-top:1px solid var(--border);margin-top:4px;}
-.btn{background:linear-gradient(135deg,var(--accent),#00a37a);color:#000;border:none;border-radius:10px;padding:12px 28px;font-weight:700;font-size:0.9rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:opacity 0.2s;margin-top:8px;}
-.btn:hover{opacity:0.85;}
-.btn-secondary{background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:12px 24px;font-size:0.9rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.2s;}
-.btn-secondary:hover{border-color:var(--accent);color:var(--accent);}
-.form-actions{display:flex;gap:12px;margin-top:20px;align-items:center;}
-.toast{position:fixed;bottom:24px;right:24px;z-index:999;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 20px;font-size:0.85rem;box-shadow:0 8px 32px rgba(0,0,0,0.4);display:flex;align-items:center;gap:10px;animation:slideIn 0.3s ease;}
-@keyframes slideIn{from{transform:translateY(20px);opacity:0;}to{transform:translateY(0);opacity:1;}}
-.toast.success{border-color:rgba(35,209,96,0.4);color:var(--ok);}
-.toast.error{border-color:rgba(255,94,87,0.4);color:var(--danger);}
-
+.form-card{background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:22px;max-width:860px;}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;}
+.fg{display:flex;flex-direction:column;gap:5px;}
+.fg label{font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;font-family:'IBM Plex Mono',monospace;}
+.fg input,.fg select{background:var(--panel2);border:1px solid var(--border);border-radius:3px;padding:8px 10px;color:var(--text);font-size:0.82rem;font-family:'IBM Plex Sans',sans-serif;transition:border-color .15s;}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--accent);}
+.fg input[readonly]{opacity:.5;}
+.fsec{grid-column:1/-1;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;font-weight:600;color:var(--accent);padding-top:6px;border-top:1px solid var(--border);margin-top:4px;text-transform:uppercase;letter-spacing:0.5px;}
+.form-actions{display:flex;gap:10px;margin-top:18px;align-items:center;}
+.btn-main{background:var(--accent);color:#000;border:none;border-radius:3px;padding:9px 22px;font-weight:600;font-size:0.85rem;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;transition:opacity .15s;}
+.btn-main:hover{opacity:.85;}
+/* CONFIG */
+.cfg-card{background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:22px;max-width:780px;margin-bottom:14px;}
+.cfg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;}
+.cfg-g{display:flex;flex-direction:column;gap:5px;}
+.cfg-g label{font-size:0.67rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;font-family:'IBM Plex Mono',monospace;}
+.cfg-g input{background:var(--panel2);border:1px solid var(--border);border-radius:3px;padding:7px 10px;color:var(--text);font-size:0.82rem;font-family:'IBM Plex Mono',monospace;}
+.cfg-g input:focus{outline:none;border-color:var(--accent);}
+.cfg-sec{grid-column:1/-1;font-family:'IBM Plex Mono',monospace;font-size:0.7rem;font-weight:600;color:var(--accent);padding-top:6px;border-top:1px solid var(--border);margin-top:4px;text-transform:uppercase;letter-spacing:0.5px;}
+.cfg-note{font-size:0.7rem;color:var(--muted);grid-column:1/-1;line-height:1.5;}
+/* TOAST */
+.toast{position:fixed;bottom:20px;right:20px;z-index:999;background:var(--panel);border:1px solid var(--border);border-radius:3px;padding:11px 16px;font-size:0.8rem;font-family:'IBM Plex Mono',monospace;box-shadow:0 4px 16px rgba(0,0,0,.4);animation:slideup .25s ease;}
+@keyframes slideup{from{transform:translateY(12px);opacity:0}to{transform:translateY(0);opacity:1}}
+.toast.ok{border-left:3px solid var(--ok);color:var(--ok);}
+.toast.err{border-left:3px solid var(--danger);color:var(--danger);}
+/* AM WARN */
+.am-warn{background:rgba(224,144,48,0.07);border:1px solid rgba(224,144,48,0.25);border-radius:3px;padding:8px 12px;font-size:0.74rem;color:var(--warn);margin-bottom:14px;display:none;font-family:'IBM Plex Mono',monospace;}
 /* RESPONSIVE */
-@media(max-width:900px){.charts-grid{grid-template-columns:1fr;}.gauge-grid{grid-template-columns:1fr 1fr;}.dash{padding:16px;}}
-@media(max-width:600px){.kpi-grid{grid-template-columns:1fr 1fr;}.gauge-grid{grid-template-columns:1fr;}nav button{font-size:0.78rem;padding:12px 12px;}}
+@media(max-width:800px){.charts-2,.charts-3{grid-template-columns:1fr;}.gauge-row{grid-template-columns:1fr 1fr;}.tab-pane{padding:14px;}}
+@media(max-width:500px){.kpi-grid{grid-template-columns:1fr 1fr;}.gauge-row{grid-template-columns:1fr;}nav button{padding:9px 10px;font-size:0.75rem;}}
 </style>
 </head>
 <body>
 
 <header>
-  <div class="logo">🌊</div>
+  <div class="hdr-mark">ETE</div>
   <div>
     <h1>ETE Danone — BI Operacional</h1>
-    <div style="font-size:0.76rem;color:var(--muted);">Painel Inteligente de Controle · Planilha: Monitoramento</div>
+    <div class="sub">Fonte: Planilha MONITORAMENTO_DIARIO — aba Monitoramento</div>
   </div>
-  <div class="sub" style="display:flex;gap:12px;align-items:center;">
-    <span class="dot-live">AO VIVO</span>
-    <span id="last-update" style="font-size:0.75rem;color:var(--muted);"></span>
-    <button id="btn-tema" onclick="toggleTema()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 14px;color:var(--text);cursor:pointer;font-size:0.8rem;">🌙</button>
+  <div class="hdr-right">
+    <span class="live-badge">AO VIVO</span>
+    <span id="last-dt" style="font-size:0.7rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;"></span>
+    <button class="btn-sm" id="btn-tema" onclick="toggleTema()">Tema Claro</button>
   </div>
 </header>
 
 <nav>
-  <button class="active" onclick="setTab('dashboard',this)">📊 Painel</button>
-  <button onclick="setTab('gerencial',this)">🧠 Visão Gerencial</button>
-  <button onclick="setTab('indicadores',this)">📈 Indicadores</button>
-  <button onclick="setTab('historico',this)">📋 Histórico</button>
-  <button onclick="setTab('lancamento',this)">➕ Lançamento</button>
-  <button onclick="setTab('configuracoes',this)">⚙️ Limites</button>
+  <button class="active" onclick="setTab('painel',this)">Painel</button>
+  <button onclick="setTab('gerencial',this)">Visao Gerencial</button>
+  <button onclick="setTab('indicadores',this)">Indicadores</button>
+  <button onclick="setTab('historico',this)">Historico</button>
+  <button onclick="setTab('lancamento',this)">Lancamento</button>
+  <button onclick="setTab('configuracoes',this)">Limites</button>
 </nav>
 
 <!-- FILTRO GLOBAL -->
-<div style="padding:16px 32px 0;">
-  <div class="filter-global">
-    <label>📅 Filtro de período:</label>
-    <label style="font-weight:400;">De</label>
-    <input type="date" id="filt-de" value="2026-01-01" onchange="applyFilter()">
-    <label style="font-weight:400;">Até</label>
-    <input type="date" id="filt-ate" value="2026-06-30" onchange="applyFilter()">
-    <button class="btn-secondary" style="padding:8px 16px;" onclick="applyFilter()">🔍 Filtrar</button>
-    <button class="btn-secondary" style="padding:8px 16px;" onclick="clearFilter()">✕ Limpar</button>
-    <span class="filter-active-notice" id="filter-notice">Filtro ativo</span>
+<div style="padding:12px 28px 0;">
+  <div class="filter-bar">
+    <label>PERIODO:</label>
+    <label style="font-size:0.73rem;color:var(--muted);">De</label>
+    <input type="date" id="filt-de" onchange="applyFilter()">
+    <label style="font-size:0.73rem;color:var(--muted);">Ate</label>
+    <input type="date" id="filt-ate" onchange="applyFilter()">
+    <button class="btn-sm" onclick="applyFilter()">Filtrar</button>
+    <button class="btn-sm" onclick="clearFilter()">Limpar</button>
+    <span class="filter-badge" id="fbadge">FILTRO ATIVO</span>
   </div>
 </div>
 
-<!-- ===== TAB: DASHBOARD ===== -->
-<div id="tab-dashboard" class="tab-content active dash">
-  <div id="alerts-bar" class="alerts-bar"></div>
-  <div id="am-alert" class="am-alert">⚠️ <strong>Atenção:</strong> A relação A/M não está variando nos dados filtrados — possível problema nos dados ou cálculo. Sugestão: A/M = DQO_EB_kg ÷ (SST_Tanque × Volume_Tanque)</div>
+<!-- PAINEL -->
+<div id="tab-painel" class="tab-pane active">
+  <div class="am-warn" id="am-warn">A/M: todos os valores registrados sao zero ou nulos. Configure o volume do tanque em Limites para calculo automatico.</div>
+  <div class="alert-strip" id="alert-strip"><span class="alert-strip-label">STATUS:</span></div>
   <div class="kpi-grid" id="kpi-grid"></div>
-  <div class="section-title">📉 Tendências — Período Selecionado</div>
-  <div class="charts-grid">
-    <div class="chart-card">
-      <div class="chart-title">IVL (Índice Volumétrico de Lodo)</div>
-      <div class="chart-meta" id="meta-ivl-chart">Meta: &lt;150 mL/g — Limite crítico: 200 mL/g</div>
-      <div class="chart-canvas-wrap"><canvas id="chartIVL"></canvas></div>
+  <div class="section-hdr">Tendencias — Periodo Selecionado</div>
+  <div class="charts-2">
+    <div class="chart-box">
+      <div class="chart-ttl">IVL — Indice Volumetrico de Lodo</div>
+      <div class="chart-meta" id="m-ivl">Meta / Critico configuravel</div>
+      <div class="chart-wrap"><canvas id="cIVL"></canvas></div>
     </div>
-    <div class="chart-card">
-      <div class="chart-title">Idade do Lodo</div>
-      <div class="chart-meta" id="meta-idade-chart">Faixa ideal: 18–30 dias</div>
-      <div class="chart-canvas-wrap"><canvas id="chartIdade"></canvas></div>
+    <div class="chart-box">
+      <div class="chart-ttl">DQO Saida Decantador (mg/L)</div>
+      <div class="chart-meta" id="m-dqo">Meta configuravel</div>
+      <div class="chart-wrap"><canvas id="cDQO"></canvas></div>
     </div>
-    <div class="chart-card">
-      <div class="chart-title">SST — Sólidos em Suspensão</div>
-      <div class="chart-meta" id="meta-sst-chart">SST Tanque · SST Efluente meta &lt;100 mg/L</div>
-      <div class="chart-canvas-wrap"><canvas id="chartSST"></canvas></div>
+    <div class="chart-box">
+      <div class="chart-ttl">SST Tanque e Efluente (mg/L)</div>
+      <div class="chart-meta" id="m-sst">SST Tanque + SST Efluente — meta efluente configuravel</div>
+      <div class="chart-wrap"><canvas id="cSST"></canvas></div>
     </div>
-    <div class="chart-card">
-      <div class="chart-title">DQO — Saída Decantador</div>
-      <div class="chart-meta" id="meta-dqo-chart">Meta: &lt;180 mg/L</div>
-      <div class="chart-canvas-wrap"><canvas id="chartDQO"></canvas></div>
+    <div class="chart-box">
+      <div class="chart-ttl">Idade do Lodo (dias)</div>
+      <div class="chart-meta" id="m-idade">Faixa ideal configuravel</div>
+      <div class="chart-wrap"><canvas id="cIdade"></canvas></div>
     </div>
-    <div class="chart-card full">
-      <div class="chart-title">Vazão Efluente Bruto (m³/dia) + DQO Entrada (kg/dia)</div>
-      <div class="chart-meta">Dois eixos — barras = vazão · linha = carga orgânica</div>
-      <div class="chart-canvas-wrap" style="height:240px;"><canvas id="chartVazao"></canvas></div>
+    <div class="chart-box full">
+      <div class="chart-ttl">Vazao Efluente Bruto (m3/dia) + DQO Entrada (kg/dia)</div>
+      <div class="chart-meta">Barras = vazao | Linha = carga organica</div>
+      <div class="chart-wrap tall"><canvas id="cVazao"></canvas></div>
     </div>
   </div>
-  <div class="section-title">🎯 Medidores — Último Registro do Período</div>
-  <div class="gauge-grid">
-    <div class="gauge-card">
-      <div class="gauge-title">IVL (mL/g)</div>
-      <div class="gauge-wrap"><canvas id="gaugeIVL"></canvas>
-        <div class="gauge-center"><div class="gauge-val" id="gv-ivl">—</div><div class="gauge-unit">mL/g</div></div>
+  <div class="section-hdr">Medidores — Ultimo Registro do Periodo</div>
+  <div class="gauge-row">
+    <div class="gauge-box">
+      <div class="gauge-ttl">IVL (mL/g)</div>
+      <div class="gauge-wrap"><canvas id="gIVL"></canvas>
+        <div class="gauge-center"><div class="gauge-num" id="gn-ivl">—</div><div class="gauge-unit">mL/g</div></div>
       </div>
-      <div class="gauge-range" id="gr-ivl"></div>
+      <div class="gauge-lbl" id="gl-ivl"></div>
     </div>
-    <div class="gauge-card">
-      <div class="gauge-title">Idade do Lodo (dias)</div>
-      <div class="gauge-wrap"><canvas id="gaugeIdade"></canvas>
-        <div class="gauge-center"><div class="gauge-val" id="gv-idade">—</div><div class="gauge-unit">dias</div></div>
+    <div class="gauge-box">
+      <div class="gauge-ttl">Idade do Lodo (dias)</div>
+      <div class="gauge-wrap"><canvas id="gIdade"></canvas>
+        <div class="gauge-center"><div class="gauge-num" id="gn-idade">—</div><div class="gauge-unit">dias</div></div>
       </div>
-      <div class="gauge-range" id="gr-idade"></div>
+      <div class="gauge-lbl" id="gl-idade"></div>
     </div>
-    <div class="gauge-card">
-      <div class="gauge-title">Relação A/M</div>
-      <div class="gauge-wrap"><canvas id="gaugeAM"></canvas>
-        <div class="gauge-center"><div class="gauge-val" id="gv-am">—</div><div class="gauge-unit">kg DQO/kg SST·d</div></div>
+    <div class="gauge-box">
+      <div class="gauge-ttl">Relacao A/M</div>
+      <div class="gauge-wrap"><canvas id="gAM"></canvas>
+        <div class="gauge-center"><div class="gauge-num" id="gn-am">—</div><div class="gauge-unit">kg DQO/kg SST·d</div></div>
       </div>
-      <div class="gauge-range" id="gr-am"></div>
+      <div class="gauge-lbl" id="gl-am"></div>
     </div>
   </div>
 </div>
 
-<!-- ===== TAB: GERENCIAL ===== -->
-<div id="tab-gerencial" class="tab-content dash">
-  <div class="section-title">🧠 Diagnóstico Automático do Sistema</div>
-  <div id="gerencial-cards"></div>
-  <div class="section-title">💡 Recomendações Operacionais</div>
-  <div id="recomendacoes-panel" style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;"></div>
-  <div class="section-title">📊 Resumo Estatístico do Período</div>
-  <div id="stats-panel" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;"></div>
+<!-- GERENCIAL -->
+<div id="tab-gerencial" class="tab-pane">
+  <div class="section-hdr">Diagnostico Automatico do Sistema</div>
+  <div id="gcards"></div>
+  <div class="section-hdr" style="margin-top:20px;">Recomendacoes Operacionais</div>
+  <div id="recos-panel" style="background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:16px;"></div>
+  <div class="section-hdr" style="margin-top:20px;">Resumo Estatistico — Periodo</div>
+  <div id="stats-panel" class="stats-grid"></div>
 </div>
 
-<!-- ===== TAB: INDICADORES ===== -->
-<div id="tab-indicadores" class="tab-content dash">
-  <div class="section-title">📈 Série Histórica dos Indicadores Biológicos</div>
-  <div class="charts-grid">
-    <div class="chart-card full">
-      <div class="chart-title">IVL — Série Completa</div>
-      <div class="chart-meta">Linha verde = meta · Linha vermelha = limite crítico (configuráveis)</div>
-      <div class="chart-canvas-wrap" style="height:280px;"><canvas id="chartIVLFull"></canvas></div>
+<!-- INDICADORES -->
+<div id="tab-indicadores" class="tab-pane">
+  <div class="section-hdr">Serie Historica dos Indicadores Biologicos</div>
+  <div class="charts-2">
+    <div class="chart-box full">
+      <div class="chart-ttl">IVL — Serie Completa</div>
+      <div class="chart-meta" id="m-ivl-full">Linha verde = meta | Linha vermelha = limite critico</div>
+      <div class="chart-wrap tall"><canvas id="cIVLfull"></canvas></div>
     </div>
-    <div class="chart-card full">
-      <div class="chart-title">SST Tanque de Nitrificação (mg/L)</div>
-      <div class="chart-meta">Sólidos suspensos totais no tanque biológico</div>
-      <div class="chart-canvas-wrap" style="height:260px;"><canvas id="chartSSTFull"></canvas></div>
+    <div class="chart-box full">
+      <div class="chart-ttl">SST Tanque de Nitrificacao (mg/L)</div>
+      <div class="chart-meta">Solidos suspensos totais no tanque biologico</div>
+      <div class="chart-wrap"><canvas id="cSSTfull"></canvas></div>
     </div>
-    <div class="chart-card">
-      <div class="chart-title">SS Proveta (mL/L)</div>
+    <div class="chart-box">
+      <div class="chart-ttl">SS Proveta (mL/L)</div>
       <div class="chart-meta">Volume de lodo sedimentado em 30 min</div>
-      <div class="chart-canvas-wrap"><canvas id="chartSSProv"></canvas></div>
+      <div class="chart-wrap"><canvas id="cSSProv"></canvas></div>
     </div>
-    <div class="chart-card">
-      <div class="chart-title">DQO Saída vs SST Efluente</div>
-      <div class="chart-meta">DQO meta configurável · SST efluente meta configurável</div>
-      <div class="chart-canvas-wrap"><canvas id="chartDQOSST"></canvas></div>
+    <div class="chart-box">
+      <div class="chart-ttl">DQO Saida vs SST Efluente</div>
+      <div class="chart-meta" id="m-dqosst">Metas configuráveis</div>
+      <div class="chart-wrap"><canvas id="cDQOSST"></canvas></div>
     </div>
-    <div class="chart-card full">
-      <div class="chart-title">🔬 pH — Tanque Nitrificação e Flotador</div>
-      <div class="chart-meta">pH ótimo para nitrificação: 7,5–8,5</div>
-      <div class="chart-canvas-wrap" style="height:240px;"><canvas id="chartPH"></canvas></div>
+    <div class="chart-box full">
+      <div class="chart-ttl">pH — Tanque Nitrificacao e Flotador</div>
+      <div class="chart-meta">pH otimo para nitrificacao: 7,5–8,5</div>
+      <div class="chart-wrap"><canvas id="cPH"></canvas></div>
     </div>
-    <div class="chart-card full">
-      <div class="chart-title">Relação A/M ao longo do tempo</div>
-      <div class="chart-meta">Meta: 0,08–0,15 kg DQO/kg SST·d</div>
-      <div class="chart-canvas-wrap" style="height:240px;"><canvas id="chartAM"></canvas></div>
+    <div class="chart-box full">
+      <div class="chart-ttl">Relacao A/M ao longo do tempo</div>
+      <div class="chart-meta" id="m-am">Meta configuravel</div>
+      <div class="chart-wrap"><canvas id="cAM"></canvas></div>
+    </div>
+    <div class="chart-box full">
+      <div class="chart-ttl">Oxigenio Dissolvido — Tanque de Nitrificacao (mg/L)</div>
+      <div class="chart-meta">OD ideal: 1,5–3,0 mg/L para nitrificacao</div>
+      <div class="chart-wrap"><canvas id="cOD"></canvas></div>
     </div>
   </div>
 </div>
 
-<!-- ===== TAB: HISTORICO ===== -->
-<div id="tab-historico" class="tab-content dash">
-  <div class="section-title">📋 Histórico de Dados — Período Filtrado</div>
-  <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
-    <button class="btn-secondary" style="padding:8px 16px;" onclick="exportCSV()">⬇ Exportar CSV</button>
-    <span style="font-size:0.78rem;color:var(--muted);align-self:center;">O filtro de data do painel já é aplicado aqui automaticamente.</span>
+<!-- HISTORICO -->
+<div id="tab-historico" class="tab-pane">
+  <div class="section-hdr">Historico de Dados — Periodo Filtrado</div>
+  <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+    <button class="btn-sm" onclick="exportCSV()">Exportar CSV</button>
+    <span style="font-size:0.72rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;" id="tbl-count"></span>
   </div>
-  <div class="table-wrap">
-    <table id="data-table">
-      <thead>
-        <tr>
-          <th>Data</th><th>Vazão EB (m³/d)</th><th>pH EB</th><th>DQO EB (mg/L)</th>
-          <th>DQO EB (kg/d)</th><th>Vazão Eq. (m³/d)</th><th>SST MAB1</th><th>SST MAB2</th>
-          <th>SST Tanque (mg/L)</th><th>SS Proveta (mL)</th><th>IVL (mL/g)</th>
-          <th>pH Tanque</th><th>DQO Saída (mg/L)</th><th>SST Efluente</th>
-          <th>Idade Lodo (d)</th><th>A/M</th><th>Status IVL</th>
-        </tr>
-      </thead>
-      <tbody id="table-body"></tbody>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>Data</th><th>Vazao EB</th><th>pH EB</th><th>DQO EB mg/L</th><th>DQO EB kg/d</th>
+        <th>Vazao Eq.</th><th>SST MAB1</th><th>SST MAB2</th><th>SST Tanque</th>
+        <th>SS Proveta</th><th>IVL calc.</th><th>pH Tanque</th><th>DQO Saida</th>
+        <th>SST Efluente</th><th>Idade Lodo</th><th>A/M</th><th>OD Nitrif.</th><th>Status IVL</th>
+      </tr></thead>
+      <tbody id="tbl-body"></tbody>
     </table>
   </div>
 </div>
 
-<!-- ===== TAB: LANCAMENTO ===== -->
-<div id="tab-lancamento" class="tab-content dash">
-  <div class="section-title">➕ Novo Lançamento Diário</div>
-  <div class="form-wrap">
+<!-- LANCAMENTO -->
+<div id="tab-lancamento" class="tab-pane">
+  <div class="section-hdr">Novo Lancamento Diario</div>
+  <div class="form-card">
     <div class="form-grid">
-      <div class="form-group" style="grid-column:1/-1;"><label>Data do Registro *</label><input type="date" id="f-data" required></div>
-      <div class="form-section-label">🏭 Efluente Bruto</div>
-      <div class="form-group"><label>Vazão EB (m³/dia)</label><input type="number" id="f-vazao_eb" step="0.1" placeholder="ex: 3500"></div>
-      <div class="form-group"><label>pH EB</label><input type="number" id="f-ph_eb" step="0.01" placeholder="ex: 7.5"></div>
-      <div class="form-group"><label>DQO EB Composta (mg/L)</label><input type="number" id="f-dqo_eb_mg" step="1" placeholder="ex: 3000"></div>
-      <div class="form-group"><label>DQO EB Calc. (kg/dia)</label><input type="number" id="f-dqo_eb_kg" step="0.01" placeholder="ex: 10500"></div>
-      <div class="form-section-label">⚖️ Equalização / MAB</div>
-      <div class="form-group"><label>Vazão Equalizado (m³/dia)</label><input type="number" id="f-vazao_eq" step="0.1"></div>
-      <div class="form-group"><label>SST MAB1 (mg/L)</label><input type="number" id="f-sst_mab1" step="1"></div>
-      <div class="form-group"><label>SST MAB2 (mg/L)</label><input type="number" id="f-sst_mab2" step="1"></div>
-      <div class="form-section-label">🧪 Flotador</div>
-      <div class="form-group"><label>pH Tanque Neutralização</label><input type="number" id="f-ph_flotador" step="0.01"></div>
-      <div class="form-group"><label>DQO Flotador (mg/L)</label><input type="number" id="f-dqo_flotador" step="1"></div>
-      <div class="form-section-label">🦠 Tanque de Nitrificação (Indicadores Biológicos)</div>
-      <div class="form-group"><label>SST Tanque (mg/L) *</label><input type="number" id="f-sst_tanque" step="1" placeholder="ex: 5500"></div>
-      <div class="form-group"><label>SS Proveta (mL/L) *</label><input type="number" id="f-ss_proveta" step="1" placeholder="ex: 970"></div>
-      <div class="form-group"><label>IVL — calculado automático</label><input type="number" id="f-ivl_calc" step="0.1" placeholder="automático" readonly style="opacity:0.6;"></div>
-      <div class="form-group"><label>pH Tanque</label><input type="number" id="f-ph_tanque" step="0.01"></div>
-      <div class="form-group"><label>Idade do Lodo (dias)</label><input type="number" id="f-idade_lodo" step="0.1" placeholder="ex: 22"></div>
-      <div class="form-group"><label>Relação A/M</label><input type="number" id="f-relacao_am" step="0.001" placeholder="ex: 0.12"></div>
-      <div class="form-section-label">📤 Saída Decantador</div>
-      <div class="form-group"><label>DQO Saída (mg/L)</label><input type="number" id="f-dqo_saida" step="1" placeholder="meta &lt;180"></div>
-      <div class="form-group"><label>SST Efluente (mg/L)</label><input type="number" id="f-sst_efluente" step="1" placeholder="meta &lt;100"></div>
-      <div class="form-group"><label>Eficiência DQO Flotador (%)</label><input type="number" id="f-efic_dqo_flot" step="0.1"></div>
-      <div class="form-group"><label>Eficiência DQO Total (%)</label><input type="number" id="f-efic_dqo_total" step="0.1"></div>
+      <div class="fg" style="grid-column:1/-1;"><label>Data *</label><input type="date" id="f-data" required></div>
+      <div class="fsec">Efluente Bruto</div>
+      <div class="fg"><label>Vazao EB (m3/dia)</label><input type="number" id="f-vazao_eb" step="0.1"></div>
+      <div class="fg"><label>pH EB</label><input type="number" id="f-ph_eb" step="0.01"></div>
+      <div class="fg"><label>DQO EB Composta (mg/L)</label><input type="number" id="f-dqo_eb_mg" step="1"></div>
+      <div class="fg"><label>DQO EB Calc. (kg/dia)</label><input type="number" id="f-dqo_eb_kg" step="0.01"></div>
+      <div class="fsec">Equalizacao / MAB</div>
+      <div class="fg"><label>Vazao Equalizado (m3/dia)</label><input type="number" id="f-vazao_eq" step="0.1"></div>
+      <div class="fg"><label>SST MAB1 (mg/L)</label><input type="number" id="f-sst_mab1" step="1"></div>
+      <div class="fg"><label>SST MAB2 (mg/L)</label><input type="number" id="f-sst_mab2" step="1"></div>
+      <div class="fsec">Flotador</div>
+      <div class="fg"><label>pH Flotador</label><input type="number" id="f-ph_flotador" step="0.01"></div>
+      <div class="fg"><label>DQO Flotador (mg/L)</label><input type="number" id="f-dqo_flotador" step="1"></div>
+      <div class="fsec">Tanque de Nitrificacao</div>
+      <div class="fg"><label>SST Tanque (mg/L) *</label><input type="number" id="f-sst_tanque" step="1"></div>
+      <div class="fg"><label>SS Proveta (mL/L) *</label><input type="number" id="f-ss_proveta" step="1"></div>
+      <div class="fg"><label>IVL calculado (auto)</label><input type="number" id="f-ivl_calc" step="0.1" readonly></div>
+      <div class="fg"><label>pH Tanque</label><input type="number" id="f-ph_tanque" step="0.01"></div>
+      <div class="fg"><label>OD Nitrificacao (mg/L)</label><input type="number" id="f-od_nitri" step="0.1"></div>
+      <div class="fg"><label>Idade do Lodo (dias)</label><input type="number" id="f-idade_lodo" step="0.1"></div>
+      <div class="fg"><label>Relacao A/M (manual)</label><input type="number" id="f-relacao_am" step="0.001"></div>
+      <div class="fsec">Saida Decantador</div>
+      <div class="fg"><label>DQO Saida (mg/L)</label><input type="number" id="f-dqo_saida" step="1"></div>
+      <div class="fg"><label>SST Efluente (mg/L)</label><input type="number" id="f-sst_efluente" step="1"></div>
+      <div class="fg"><label>Efic. DQO Flotador (%)</label><input type="number" id="f-efic_flot" step="0.1"></div>
+      <div class="fg"><label>Efic. DQO Total (%)</label><input type="number" id="f-efic_total" step="0.1"></div>
     </div>
     <div class="form-actions">
-      <button class="btn" onclick="submitForm()">💾 Salvar Registro</button>
-      <button class="btn-secondary" onclick="clearForm()">🗑️ Limpar</button>
-      <span id="form-feedback" style="font-size:0.8rem;"></span>
+      <button class="btn-main" onclick="submitForm()">Salvar Registro</button>
+      <button class="btn-sm" onclick="clearForm()">Limpar</button>
     </div>
   </div>
 </div>
 
-<!-- ===== TAB: CONFIGURAÇÕES ===== -->
-<div id="tab-configuracoes" class="tab-content dash">
-  <div class="section-title">⚙️ Limites e Metas Configuráveis</div>
-  <p style="font-size:0.83rem;color:var(--muted);margin-bottom:20px;">Ajuste os limites e metas abaixo. Ao salvar, todos os gráficos, gauges, KPIs e alertas serão atualizados automaticamente.</p>
-  <div class="config-card">
-    <div class="config-grid">
-      <div class="config-section-label">🦠 IVL — Índice Volumétrico de Lodo (mL/g)</div>
-      <div class="config-group"><label>Mínimo</label><input type="number" id="cfg-ivl-min" step="1" value="0"></div>
-      <div class="config-group"><label>Meta (máx ideal)</label><input type="number" id="cfg-ivl-meta" step="1" value="150"></div>
-      <div class="config-group"><label>Limite Crítico</label><input type="number" id="cfg-ivl-max" step="1" value="200"></div>
-
-      <div class="config-section-label">🧪 DQO — Demanda Química de Oxigênio (mg/L)</div>
-      <div class="config-group"><label>Meta Saída (máx)</label><input type="number" id="cfg-dqo-meta" step="1" value="180"></div>
-      <div class="config-group"><label>Alerta (máx)</label><input type="number" id="cfg-dqo-max" step="1" value="220"></div>
-
-      <div class="config-section-label">💧 SST — Sólidos em Suspensão Efluente (mg/L)</div>
-      <div class="config-group"><label>Meta (máx ideal)</label><input type="number" id="cfg-sst-meta" step="1" value="100"></div>
-      <div class="config-group"><label>Limite Alerta</label><input type="number" id="cfg-sst-max" step="1" value="150"></div>
-
-      <div class="config-section-label">⏱️ Idade do Lodo (dias)</div>
-      <div class="config-group"><label>Mínimo Ideal</label><input type="number" id="cfg-idade-min" step="1" value="18"></div>
-      <div class="config-group"><label>Máximo Ideal</label><input type="number" id="cfg-idade-max" step="1" value="30"></div>
-
-      <div class="config-section-label">⚖️ Relação A/M (kg DQO / kg SST·d)</div>
-      <div class="config-group"><label>Mínimo Ideal</label><input type="number" id="cfg-am-min" step="0.001" value="0.08"></div>
-      <div class="config-group"><label>Máximo Ideal</label><input type="number" id="cfg-am-max" step="0.001" value="0.15"></div>
-
-      <div class="config-section-label">🏭 Volume do Tanque de Aeração (m³)</div>
-      <div class="config-group"><label>Volume (m³)</label><input type="number" id="cfg-volume-tanque" step="1" value="0" placeholder="ex: 1200"></div>
-      <p style="font-size:0.75rem;color:var(--muted);grid-column:1/-1;">Se informado, a A/M será calculada automaticamente como: A/M = DQO_EB_kg ÷ (SST_Tanque × Volume_m³ ÷ 1000)</p>
+<!-- CONFIGURACOES -->
+<div id="tab-configuracoes" class="tab-pane">
+  <div class="section-hdr">Limites e Metas Configuráveis</div>
+  <p style="font-size:0.76rem;color:var(--muted);margin-bottom:14px;font-family:'IBM Plex Mono',monospace;">Ao salvar, todos os graficos, KPIs, gauges e alertas sao atualizados automaticamente.</p>
+  <div class="cfg-card">
+    <div class="cfg-grid">
+      <div class="cfg-sec">IVL — Indice Volumetrico de Lodo (mL/g)</div>
+      <div class="cfg-g"><label>Minimo</label><input type="number" id="cfg-ivl-min" step="1" value="0"></div>
+      <div class="cfg-g"><label>Meta (max ideal)</label><input type="number" id="cfg-ivl-meta" step="1" value="150"></div>
+      <div class="cfg-g"><label>Limite Critico</label><input type="number" id="cfg-ivl-max" step="1" value="200"></div>
+      <div class="cfg-sec">DQO Saida — Demanda Quimica de Oxigenio (mg/L)</div>
+      <div class="cfg-g"><label>Meta (max ideal)</label><input type="number" id="cfg-dqo-meta" step="1" value="180"></div>
+      <div class="cfg-g"><label>Limite Alerta</label><input type="number" id="cfg-dqo-max" step="1" value="220"></div>
+      <div class="cfg-sec">SST Efluente — Solidos em Suspensao (mg/L)</div>
+      <div class="cfg-g"><label>Meta (max ideal)</label><input type="number" id="cfg-sst-meta" step="1" value="100"></div>
+      <div class="cfg-g"><label>Limite Alerta</label><input type="number" id="cfg-sst-max" step="1" value="150"></div>
+      <div class="cfg-sec">Idade do Lodo (dias)</div>
+      <div class="cfg-g"><label>Minimo Ideal</label><input type="number" id="cfg-idade-min" step="1" value="18"></div>
+      <div class="cfg-g"><label>Maximo Ideal</label><input type="number" id="cfg-idade-max" step="1" value="30"></div>
+      <div class="cfg-sec">Relacao A/M (kg DQO / kg SST·d)</div>
+      <div class="cfg-g"><label>Minimo Ideal</label><input type="number" id="cfg-am-min" step="0.001" value="0.08"></div>
+      <div class="cfg-g"><label>Maximo Ideal</label><input type="number" id="cfg-am-max" step="0.001" value="0.15"></div>
+      <div class="cfg-sec">Volume do Tanque de Aeracao (m3)</div>
+      <div class="cfg-g"><label>Volume (m3)</label><input type="number" id="cfg-vol-tanque" step="1" value="0" placeholder="ex: 1200"></div>
+      <div class="cfg-note">Se informado, A/M sera calculado automaticamente: A/M = DQO_EB_kg / (SST_tanque(g/L) * Volume)</div>
     </div>
-    <div style="margin-top:20px;display:flex;gap:12px;">
-      <button class="btn" onclick="saveLimits()">✅ Salvar Configurações</button>
-      <button class="btn-secondary" onclick="resetLimits()">↩️ Restaurar Padrões</button>
+    <div style="display:flex;gap:10px;margin-top:18px;">
+      <button class="btn-main" onclick="saveLimits()">Salvar Configuracoes</button>
+      <button class="btn-sm" onclick="resetLimits()">Restaurar Padroes</button>
     </div>
   </div>
 </div>
 
-<div id="toast-container"></div>
+<div id="toast-ct"></div>
 
 <script>
-// ════════════════════════════════════════════════════════════════
-// DADOS HISTÓRICOS — origem: aba "Monitoramento" da planilha
-// ════════════════════════════════════════════════════════════════
-const HISTORICAL_DATA = [{"data":"2026-01-01","vazao_eb":2250.0,"ph_eb":7.1,"dqo_eb_mg":1238.0,"dqo_eb_kg":2784.38,"vazao_eq":2140.0,"sst_mab1":1100.0,"sst_mab2":900.0,"ph_flotador":5.1,"dqo_flotador":1660.0,"sst_tanque":5600.0,"ss_proveta":970.0,"ivl_svi":0.17,"ph_tanque":7.89,"dqo_saida":90.0,"sst_efluente":23.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":173.2},{"data":"2026-01-02","vazao_eb":3792.0,"ph_eb":8.1,"dqo_eb_mg":2735.0,"dqo_eb_kg":10371.12,"vazao_eq":3644.0,"sst_mab1":1600.0,"sst_mab2":900.0,"ph_flotador":5.0,"dqo_flotador":1696.0,"sst_tanque":5500.0,"ss_proveta":970.0,"ivl_svi":0.18,"ph_tanque":7.83,"dqo_saida":86.0,"sst_efluente":13.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":176.4},{"data":"2026-01-03","vazao_eb":3326.0,"ph_eb":8.0,"dqo_eb_mg":3161.0,"dqo_eb_kg":10514.32,"vazao_eq":3310.0,"sst_mab1":1000.0,"sst_mab2":710.0,"ph_flotador":4.9,"dqo_flotador":1412.0,"sst_tanque":5350.0,"ss_proveta":970.0,"ivl_svi":0.18,"ph_tanque":7.82,"dqo_saida":96.0,"sst_efluente":12.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":181.3},{"data":"2026-01-04","vazao_eb":3108.0,"ph_eb":7.25,"dqo_eb_mg":2606.0,"dqo_eb_kg":8100.23,"vazao_eq":2878.0,"sst_mab1":990.0,"sst_mab2":865.0,"ph_flotador":4.9,"dqo_flotador":1364.0,"sst_tanque":4900.0,"ss_proveta":970.0,"ivl_svi":0.2,"ph_tanque":7.77,"dqo_saida":90.0,"sst_efluente":14.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":198.0},{"data":"2026-01-05","vazao_eb":2887.0,"ph_eb":11.6,"dqo_eb_mg":3639.0,"dqo_eb_kg":10505.07,"vazao_eq":2835.0,"sst_mab1":null,"sst_mab2":null,"ph_flotador":4.6,"dqo_flotador":1496.0,"sst_tanque":5500.0,"ss_proveta":970.0,"ivl_svi":0.18,"ph_tanque":7.85,"dqo_saida":110.0,"sst_efluente":22.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":176.4},{"data":"2026-01-06","vazao_eb":2410.0,"ph_eb":12.2,"dqo_eb_mg":3033.0,"dqo_eb_kg":7308.33,"vazao_eq":2309.0,"sst_mab1":951.0,"sst_mab2":1084.0,"ph_flotador":4.8,"dqo_flotador":1730.0,"sst_tanque":5250.0,"ss_proveta":980.0,"ivl_svi":0.19,"ph_tanque":7.8,"dqo_saida":94.0,"sst_efluente":8.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":186.7},{"data":"2026-01-07","vazao_eb":3619.0,"ph_eb":7.43,"dqo_eb_mg":3354.0,"dqo_eb_kg":12137.22,"vazao_eq":3232.0,"sst_mab1":1596.0,"sst_mab2":791.0,"ph_flotador":5.0,"dqo_flotador":1970.0,"sst_tanque":5280.0,"ss_proveta":970.0,"ivl_svi":0.18,"ph_tanque":7.8,"dqo_saida":50.0,"sst_efluente":37.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":183.7},{"data":"2026-01-08","vazao_eb":3778.0,"ph_eb":6.32,"dqo_eb_mg":4285.0,"dqo_eb_kg":16188.73,"vazao_eq":3241.0,"sst_mab1":1027.0,"sst_mab2":1264.0,"ph_flotador":4.4,"dqo_flotador":1670.0,"sst_tanque":5550.0,"ss_proveta":980.0,"ivl_svi":0.18,"ph_tanque":7.85,"dqo_saida":120.0,"sst_efluente":41.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":176.6},{"data":"2026-01-09","vazao_eb":3470.0,"ph_eb":6.16,"dqo_eb_mg":3609.0,"dqo_eb_kg":12522.36,"vazao_eq":3606.0,"sst_mab1":1644.0,"sst_mab2":987.0,"ph_flotador":4.9,"dqo_flotador":1680.0,"sst_tanque":6380.0,"ss_proveta":980.0,"ivl_svi":0.15,"ph_tanque":7.8,"dqo_saida":33.0,"sst_efluente":22.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":153.6},{"data":"2026-01-10","vazao_eb":3022.0,"ph_eb":6.44,"dqo_eb_mg":3398.0,"dqo_eb_kg":10267.25,"vazao_eq":3265.0,"sst_mab1":2100.0,"sst_mab2":1400.0,"ph_flotador":5.5,"dqo_flotador":1940.0,"sst_tanque":6300.0,"ss_proveta":980.0,"ivl_svi":0.16,"ph_tanque":7.9,"dqo_saida":89.0,"sst_efluente":43.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":155.6},{"data":"2026-01-11","vazao_eb":2963.0,"ph_eb":10.49,"dqo_eb_mg":3153.0,"dqo_eb_kg":9340.86,"vazao_eq":3145.0,"sst_mab1":1100.0,"sst_mab2":970.0,"ph_flotador":5.7,"dqo_flotador":1880.0,"sst_tanque":6100.0,"ss_proveta":980.0,"ivl_svi":0.16,"ph_tanque":7.9,"dqo_saida":102.0,"sst_efluente":16.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":160.7},{"data":"2026-01-12","vazao_eb":3303.0,"ph_eb":9.32,"dqo_eb_mg":3720.0,"dqo_eb_kg":12287.16,"vazao_eq":3284.0,"sst_mab1":1500.0,"sst_mab2":2100.0,"ph_flotador":4.6,"dqo_flotador":1992.0,"sst_tanque":7900.0,"ss_proveta":990.0,"ivl_svi":0.13,"ph_tanque":7.83,"dqo_saida":130.0,"sst_efluente":48.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":125.3},{"data":"2026-01-13","vazao_eb":3295.0,"ph_eb":12.6,"dqo_eb_mg":3070.0,"dqo_eb_kg":10115.65,"vazao_eq":3076.0,"sst_mab1":1230.0,"sst_mab2":866.0,"ph_flotador":4.9,"dqo_flotador":2016.0,"sst_tanque":7000.0,"ss_proveta":990.0,"ivl_svi":0.14,"ph_tanque":7.8,"dqo_saida":130.0,"sst_efluente":5.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":141.4},{"data":"2026-01-14","vazao_eb":3473.0,"ph_eb":8.3,"dqo_eb_mg":4614.0,"dqo_eb_kg":16023.55,"vazao_eq":3406.0,"sst_mab1":800.0,"sst_mab2":3100.0,"ph_flotador":4.8,"dqo_flotador":1292.0,"sst_tanque":6833.0,"ss_proveta":990.0,"ivl_svi":0.14,"ph_tanque":7.82,"dqo_saida":104.0,"sst_efluente":14.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":144.9},{"data":"2026-01-15","vazao_eb":4007.0,"ph_eb":10.3,"dqo_eb_mg":2975.0,"dqo_eb_kg":11920.83,"vazao_eq":3334.0,"sst_mab1":1134.0,"sst_mab2":890.0,"ph_flotador":4.6,"dqo_flotador":1672.0,"sst_tanque":6600.0,"ss_proveta":970.0,"ivl_svi":0.15,"ph_tanque":7.82,"dqo_saida":120.0,"sst_efluente":16.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":147.0},{"data":"2026-01-16","vazao_eb":3263.0,"ph_eb":6.15,"dqo_eb_mg":2396.0,"dqo_eb_kg":7818.96,"vazao_eq":3947.0,"sst_mab1":2100.0,"sst_mab2":1600.0,"ph_flotador":5.0,"dqo_flotador":1400.0,"sst_tanque":6250.0,"ss_proveta":980.0,"ivl_svi":0.16,"ph_tanque":7.85,"dqo_saida":127.0,"sst_efluente":60.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":156.8},{"data":"2026-01-17","vazao_eb":3625.0,"ph_eb":7.98,"dqo_eb_mg":2661.0,"dqo_eb_kg":9647.03,"vazao_eq":3074.0,"sst_mab1":1310.0,"sst_mab2":1046.0,"ph_flotador":4.9,"dqo_flotador":2174.0,"sst_tanque":4450.0,"ss_proveta":960.0,"ivl_svi":0.22,"ph_tanque":7.84,"dqo_saida":140.0,"sst_efluente":60.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":215.7},{"data":"2026-01-18","vazao_eb":3002.0,"ph_eb":9.86,"dqo_eb_mg":3636.0,"dqo_eb_kg":10916.02,"vazao_eq":3629.0,"sst_mab1":2100.0,"sst_mab2":1990.0,"ph_flotador":4.9,"dqo_flotador":1770.0,"sst_tanque":4100.0,"ss_proveta":960.0,"ivl_svi":0.23,"ph_tanque":7.8,"dqo_saida":140.0,"sst_efluente":60.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":234.1},{"data":"2026-01-19","vazao_eb":3419.0,"ph_eb":10.46,"dqo_eb_mg":4560.0,"dqo_eb_kg":15590.64,"vazao_eq":3265.0,"sst_mab1":1439.0,"sst_mab2":1497.0,"ph_flotador":4.9,"dqo_flotador":1430.0,"sst_tanque":4500.0,"ss_proveta":960.0,"ivl_svi":0.21,"ph_tanque":7.76,"dqo_saida":94.0,"sst_efluente":34.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":213.3},{"data":"2026-01-20","vazao_eb":3247.0,"ph_eb":6.12,"dqo_eb_mg":3631.0,"dqo_eb_kg":11790.67,"vazao_eq":3352.0,"sst_mab1":482.0,"sst_mab2":1295.0,"ph_flotador":4.9,"dqo_flotador":2104.0,"sst_tanque":5350.0,"ss_proveta":980.0,"ivl_svi":0.18,"ph_tanque":7.77,"dqo_saida":72.0,"sst_efluente":37.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":183.2},{"data":"2026-01-21","vazao_eb":3263.0,"ph_eb":9.63,"dqo_eb_mg":3680.0,"dqo_eb_kg":12007.84,"vazao_eq":3031.0,"sst_mab1":1070.0,"sst_mab2":950.0,"ph_flotador":4.8,"dqo_flotador":1340.0,"sst_tanque":5750.0,"ss_proveta":980.0,"ivl_svi":0.17,"ph_tanque":7.94,"dqo_saida":68.0,"sst_efluente":37.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":170.4},{"data":"2026-01-22","vazao_eb":3458.0,"ph_eb":5.11,"dqo_eb_mg":3331.0,"dqo_eb_kg":11519.46,"vazao_eq":3381.0,"sst_mab1":2200.0,"sst_mab2":600.0,"ph_flotador":5.0,"dqo_flotador":1650.0,"sst_tanque":5030.0,"ss_proveta":970.0,"ivl_svi":0.19,"ph_tanque":7.76,"dqo_saida":82.0,"sst_efluente":42.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":192.8},{"data":"2026-01-23","vazao_eb":3431.0,"ph_eb":6.02,"dqo_eb_mg":4069.0,"dqo_eb_kg":13959.88,"vazao_eq":3422.0,"sst_mab1":1400.0,"sst_mab2":1700.0,"ph_flotador":5.0,"dqo_flotador":2010.0,"sst_tanque":5080.0,"ss_proveta":970.0,"ivl_svi":0.19,"ph_tanque":7.62,"dqo_saida":98.0,"sst_efluente":30.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":190.9},{"data":"2026-01-24","vazao_eb":3154.0,"ph_eb":6.34,"dqo_eb_mg":2628.0,"dqo_eb_kg":8287.14,"vazao_eq":3464.0,"sst_mab1":1100.0,"sst_mab2":990.0,"ph_flotador":5.0,"dqo_flotador":1904.0,"sst_tanque":4660.0,"ss_proveta":970.0,"ivl_svi":0.21,"ph_tanque":7.85,"dqo_saida":95.0,"sst_efluente":34.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":208.2},{"data":"2026-01-25","vazao_eb":2964.0,"ph_eb":5.9,"dqo_eb_mg":4058.0,"dqo_eb_kg":12026.43,"vazao_eq":3265.0,"sst_mab1":1400.0,"sst_mab2":2200.0,"ph_flotador":4.8,"dqo_flotador":1876.0,"sst_tanque":6200.0,"ss_proveta":980.0,"ivl_svi":0.16,"ph_tanque":7.8,"dqo_saida":100.0,"sst_efluente":46.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":158.1},{"data":"2026-01-26","vazao_eb":3195.0,"ph_eb":6.1,"dqo_eb_mg":4269.0,"dqo_eb_kg":13638.66,"vazao_eq":2787.0,"sst_mab1":2100.0,"sst_mab2":2200.0,"ph_flotador":4.9,"dqo_flotador":2004.0,"sst_tanque":6000.0,"ss_proveta":980.0,"ivl_svi":0.16,"ph_tanque":7.8,"dqo_saida":98.0,"sst_efluente":37.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":163.3},{"data":"2026-01-27","vazao_eb":3256.0,"ph_eb":6.5,"dqo_eb_mg":4394.0,"dqo_eb_kg":14306.05,"vazao_eq":3130.0,"sst_mab1":null,"sst_mab2":null,"ph_flotador":4.8,"dqo_flotador":2332.0,"sst_tanque":5850.0,"ss_proveta":980.0,"ivl_svi":0.17,"ph_tanque":7.9,"dqo_saida":102.0,"sst_efluente":0.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":167.5},{"data":"2026-01-28","vazao_eb":3543.0,"ph_eb":11.2,"dqo_eb_mg":3480.0,"dqo_eb_kg":12329.64,"vazao_eq":3308.0,"sst_mab1":893.0,"sst_mab2":1184.0,"ph_flotador":0.0,"dqo_flotador":0.0,"sst_tanque":6475.0,"ss_proveta":990.0,"ivl_svi":0.15,"ph_tanque":7.81,"dqo_saida":130.0,"sst_efluente":50.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":152.9},{"data":"2026-01-29","vazao_eb":3416.0,"ph_eb":6.8,"dqo_eb_mg":4475.0,"dqo_eb_kg":15286.6,"vazao_eq":3555.0,"sst_mab1":450.0,"sst_mab2":841.0,"ph_flotador":4.7,"dqo_flotador":1986.0,"sst_tanque":6600.0,"ss_proveta":990.0,"ivl_svi":0.15,"ph_tanque":7.79,"dqo_saida":108.0,"sst_efluente":50.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":150.0},{"data":"2026-01-30","vazao_eb":4292.0,"ph_eb":11.1,"dqo_eb_mg":3431.0,"dqo_eb_kg":14726.93,"vazao_eq":3776.0,"sst_mab1":1227.0,"sst_mab2":588.0,"ph_flotador":5.3,"dqo_flotador":1760.0,"sst_tanque":6766.0,"ss_proveta":990.0,"ivl_svi":0.15,"ph_tanque":7.8,"dqo_saida":90.0,"sst_efluente":17.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":146.3},{"data":"2026-01-31","vazao_eb":3413.0,"ph_eb":6.35,"dqo_eb_mg":3651.0,"dqo_eb_kg":12461.72,"vazao_eq":3889.0,"sst_mab1":1040.0,"sst_mab2":1310.0,"ph_flotador":4.9,"dqo_flotador":1310.0,"sst_tanque":6380.0,"ss_proveta":990.0,"ivl_svi":0.16,"ph_tanque":7.86,"dqo_saida":73.0,"sst_efluente":17.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":155.2},{"data":"2026-02-01","vazao_eb":3344.0,"ph_eb":10.86,"dqo_eb_mg":2306.0,"dqo_eb_kg":7712.1,"vazao_eq":3389.0,"sst_mab1":1460.0,"sst_mab2":1390.0,"ph_flotador":4.4,"dqo_flotador":1290.0,"sst_tanque":5970.0,"ss_proveta":980.0,"ivl_svi":0.16,"ph_tanque":7.86,"dqo_saida":33.0,"sst_efluente":25.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":164.2},{"data":"2026-02-02","vazao_eb":3161.0,"ph_eb":11.28,"dqo_eb_mg":3763.0,"dqo_eb_kg":11893.26,"vazao_eq":3149.0,"sst_mab1":1330.0,"sst_mab2":1530.0,"ph_flotador":5.2,"dqo_flotador":1260.0,"sst_tanque":5630.0,"ss_proveta":980.0,"ivl_svi":0.17,"ph_tanque":7.74,"dqo_saida":140.0,"sst_efluente":61.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":174.1},{"data":"2026-02-28","vazao_eb":3558.0,"ph_eb":9.12,"dqo_eb_mg":3760.0,"dqo_eb_kg":13066.76,"vazao_eq":3581.0,"sst_mab1":1900.0,"sst_mab2":2700.0,"ph_flotador":4.1,"dqo_flotador":1560.0,"sst_tanque":5900.0,"ss_proveta":960.0,"ivl_svi":0.16,"ph_tanque":7.9,"dqo_saida":82.0,"sst_efluente":5.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":162.7},{"data":"2026-03-31","vazao_eb":3385.0,"ph_eb":10.37,"dqo_eb_mg":3648.0,"dqo_eb_kg":12346.79,"vazao_eq":3130.0,"sst_mab1":1282.0,"sst_mab2":992.0,"ph_flotador":5.4,"dqo_flotador":1600.0,"sst_tanque":5000.0,"ss_proveta":960.0,"ivl_svi":0.19,"ph_tanque":7.75,"dqo_saida":104.0,"sst_efluente":11.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":192.0},{"data":"2026-04-30","vazao_eb":3224.0,"ph_eb":6.61,"dqo_eb_mg":3925.0,"dqo_eb_kg":12654.2,"vazao_eq":3198.0,"sst_mab1":1022.0,"sst_mab2":810.0,"ph_flotador":6.0,"dqo_flotador":1642.0,"sst_tanque":5250.0,"ss_proveta":970.0,"ivl_svi":0.18,"ph_tanque":7.89,"dqo_saida":93.0,"sst_efluente":10.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":184.8},{"data":"2026-05-31","vazao_eb":2581.0,"ph_eb":11.65,"dqo_eb_mg":2734.0,"dqo_eb_kg":7055.81,"vazao_eq":2358.0,"sst_mab1":647.0,"sst_mab2":899.0,"ph_flotador":6.0,"dqo_flotador":1460.0,"sst_tanque":6050.0,"ss_proveta":970.0,"ivl_svi":0.16,"ph_tanque":7.84,"dqo_saida":90.0,"sst_efluente":12.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":null,"ivl":null,"relacao_am":null,"ivl_calc":160.3},{"data":"2026-06-01","vazao_eb":2728.0,"ph_eb":11.34,"dqo_eb_mg":3703.0,"dqo_eb_kg":10100.42,"vazao_eq":1889.0,"sst_mab1":941.0,"sst_mab2":1073.0,"ph_flotador":6.8,"dqo_flotador":1812.0,"sst_tanque":5925.0,"ss_proveta":970.0,"ivl_svi":0.16,"ph_tanque":7.74,"dqo_saida":80.0,"sst_efluente":12.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":14.4,"ivl":164.0,"relacao_am":0.0,"ivl_calc":163.7},{"data":"2026-06-02","vazao_eb":3359.0,"ph_eb":9.91,"dqo_eb_mg":3304.0,"dqo_eb_kg":11097.3,"vazao_eq":3253.0,"sst_mab1":1001.0,"sst_mab2":820.0,"ph_flotador":6.1,"dqo_flotador":1030.0,"sst_tanque":5950.0,"ss_proveta":980.0,"ivl_svi":0.16,"ph_tanque":7.73,"dqo_saida":90.0,"sst_efluente":14.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":15.8,"ivl":165.0,"relacao_am":0.0,"ivl_calc":164.7},{"data":"2026-06-03","vazao_eb":3116.0,"ph_eb":9.77,"dqo_eb_mg":4269.0,"dqo_eb_kg":13301.43,"vazao_eq":3239.0,"sst_mab1":1100.0,"sst_mab2":1400.0,"ph_flotador":6.9,"dqo_flotador":1340.0,"sst_tanque":5800.0,"ss_proveta":980.0,"ivl_svi":0.17,"ph_tanque":7.7,"dqo_saida":94.0,"sst_efluente":12.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":25.6,"ivl":169.0,"relacao_am":0.0,"ivl_calc":169.0},{"data":"2026-06-04","vazao_eb":3473.0,"ph_eb":8.44,"dqo_eb_mg":3983.0,"dqo_eb_kg":13831.22,"vazao_eq":3391.0,"sst_mab1":1100.0,"sst_mab2":1300.0,"ph_flotador":7.3,"dqo_flotador":1270.0,"sst_tanque":5250.0,"ss_proveta":980.0,"ivl_svi":0.19,"ph_tanque":8.0,"dqo_saida":87.0,"sst_efluente":7.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":15.6,"ivl":187.0,"relacao_am":0.0,"ivl_calc":186.7},{"data":"2026-06-05","vazao_eb":3252.0,"ph_eb":9.12,"dqo_eb_mg":3095.0,"dqo_eb_kg":10064.94,"vazao_eq":3465.0,"sst_mab1":1450.0,"sst_mab2":900.0,"ph_flotador":5.9,"dqo_flotador":1762.0,"sst_tanque":5800.0,"ss_proveta":980.0,"ivl_svi":0.17,"ph_tanque":7.9,"dqo_saida":82.0,"sst_efluente":11.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":15.3,"ivl":169.0,"relacao_am":0.0,"ivl_calc":169.0},{"data":"2026-06-06","vazao_eb":2738.0,"ph_eb":11.2,"dqo_eb_mg":3189.0,"dqo_eb_kg":8730.8,"vazao_eq":2941.0,"sst_mab1":1080.0,"sst_mab2":930.0,"ph_flotador":6.6,"dqo_flotador":1302.0,"sst_tanque":5683.0,"ss_proveta":980.0,"ivl_svi":0.17,"ph_tanque":8.01,"dqo_saida":74.0,"sst_efluente":10.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":31.5,"ivl":172.0,"relacao_am":0.0,"ivl_calc":172.4},{"data":"2026-06-07","vazao_eb":2096.0,"ph_eb":12.3,"dqo_eb_mg":3194.0,"dqo_eb_kg":6694.1,"vazao_eq":2016.0,"sst_mab1":1100.0,"sst_mab2":890.0,"ph_flotador":6.6,"dqo_flotador":1407.0,"sst_tanque":5650.0,"ss_proveta":980.0,"ivl_svi":0.17,"ph_tanque":7.99,"dqo_saida":70.0,"sst_efluente":6.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":18.9,"ivl":173.0,"relacao_am":0.0,"ivl_calc":173.5},{"data":"2026-06-08","vazao_eb":2902.0,"ph_eb":11.8,"dqo_eb_mg":4803.0,"dqo_eb_kg":13936.86,"vazao_eq":2811.0,"sst_mab1":1304.0,"sst_mab2":1216.0,"ph_flotador":6.5,"dqo_flotador":0.0,"sst_tanque":6066.0,"ss_proveta":980.0,"ivl_svi":0.16,"ph_tanque":7.89,"dqo_saida":80.0,"sst_efluente":2.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":23.1,"ivl":162.0,"relacao_am":0.0,"ivl_calc":161.6},{"data":"2026-06-09","vazao_eb":3077.0,"ph_eb":11.5,"dqo_eb_mg":3810.0,"dqo_eb_kg":11807.99,"vazao_eq":2980.0,"sst_mab1":893.0,"sst_mab2":906.0,"ph_flotador":6.1,"dqo_flotador":1690.0,"sst_tanque":5650.0,"ss_proveta":980.0,"ivl_svi":0.17,"ph_tanque":7.8,"dqo_saida":82.0,"sst_efluente":null,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":18.6,"ivl":173.0,"relacao_am":0.0,"ivl_calc":173.5},{"data":"2026-06-10","vazao_eb":3654.0,"ph_eb":11.6,"dqo_eb_mg":3115.0,"dqo_eb_kg":11391.35,"vazao_eq":3018.0,"sst_mab1":1213.0,"sst_mab2":1393.0,"ph_flotador":6.3,"dqo_flotador":1706.0,"sst_tanque":6700.0,"ss_proveta":980.0,"ivl_svi":0.15,"ph_tanque":7.9,"dqo_saida":94.0,"sst_efluente":16.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":21.4,"ivl":146.0,"relacao_am":0.0,"ivl_calc":146.3},{"data":"2026-06-11","vazao_eb":3463.0,"ph_eb":9.9,"dqo_eb_mg":3979.0,"dqo_eb_kg":13791.4,"vazao_eq":3383.0,"sst_mab1":1150.0,"sst_mab2":1093.0,"ph_flotador":6.0,"dqo_flotador":1710.0,"sst_tanque":6750.0,"ss_proveta":980.0,"ivl_svi":0.15,"ph_tanque":8.0,"dqo_saida":98.0,"sst_efluente":7.0,"efic_dqo_flot":null,"efic_dqo_total":null,"idade_lodo":21.7,"ivl":145.0,"relacao_am":0.0,"ivl_calc":145.2}];
+''' + data_js + '''
 
-// ════════════════════════════════════════════════════════════════
-// LIMITES CONFIGURÁVEIS — objeto central
-// ════════════════════════════════════════════════════════════════
-const DEFAULT_LIMITES = {
-  ivl:   { min: 0, meta: 150, max: 200 },
-  dqo:   { meta: 180, max: 220 },
-  sst:   { meta: 100, max: 150 },
-  idade: { min: 18, max: 30 },
-  am:    { min: 0.08, max: 0.15 },
-  volumeTanque: 0
+// ── LIMITES ──────────────────────────────────────────────────────────────────
+const DEFAULT_L = {
+  ivl:{min:0,meta:150,max:200},
+  dqo:{meta:180,max:220},
+  sst:{meta:100,max:150},
+  idade:{min:18,max:30},
+  am:{min:0.08,max:0.15},
+  vol:0
 };
+let L = {...DEFAULT_L};
+try{const s=localStorage.getItem('ete_lim');if(s)L={...DEFAULT_L,...JSON.parse(s)};}catch(e){}
 
-let LIMITES = {...DEFAULT_LIMITES};
-try {
-  const saved = localStorage.getItem('ete_limites');
-  if(saved) LIMITES = {...DEFAULT_LIMITES, ...JSON.parse(saved)};
-} catch(e){}
-
-function saveLimits() {
-  LIMITES = {
-    ivl:   { min: parseFloat(document.getElementById('cfg-ivl-min').value)||0, meta: parseFloat(document.getElementById('cfg-ivl-meta').value)||150, max: parseFloat(document.getElementById('cfg-ivl-max').value)||200 },
-    dqo:   { meta: parseFloat(document.getElementById('cfg-dqo-meta').value)||180, max: parseFloat(document.getElementById('cfg-dqo-max').value)||220 },
-    sst:   { meta: parseFloat(document.getElementById('cfg-sst-meta').value)||100, max: parseFloat(document.getElementById('cfg-sst-max').value)||150 },
-    idade: { min: parseFloat(document.getElementById('cfg-idade-min').value)||18, max: parseFloat(document.getElementById('cfg-idade-max').value)||30 },
-    am:    { min: parseFloat(document.getElementById('cfg-am-min').value)||0.08, max: parseFloat(document.getElementById('cfg-am-max').value)||0.15 },
-    volumeTanque: parseFloat(document.getElementById('cfg-volume-tanque').value)||0
+function saveLimits(){
+  L={
+    ivl:{min:nf('cfg-ivl-min',0),meta:nf('cfg-ivl-meta',150),max:nf('cfg-ivl-max',200)},
+    dqo:{meta:nf('cfg-dqo-meta',180),max:nf('cfg-dqo-max',220)},
+    sst:{meta:nf('cfg-sst-meta',100),max:nf('cfg-sst-max',150)},
+    idade:{min:nf('cfg-idade-min',18),max:nf('cfg-idade-max',30)},
+    am:{min:nf('cfg-am-min',0.08),max:nf('cfg-am-max',0.15)},
+    vol:nf('cfg-vol-tanque',0)
   };
-  try { localStorage.setItem('ete_limites', JSON.stringify(LIMITES)); } catch(e){}
-  showToast('✅ Configurações salvas! Atualizando painel...', 'success');
-  setTimeout(() => renderAll(), 500);
+  try{localStorage.setItem('ete_lim',JSON.stringify(L));}catch(e){}
+  toast('Configuracoes salvas.','ok');
+  setTimeout(renderAll,300);
 }
-function resetLimits() {
-  LIMITES = {...DEFAULT_LIMITES};
-  try { localStorage.removeItem('ete_limites'); } catch(e){}
-  loadLimitsUI();
-  renderAll();
-  showToast('↩️ Limites restaurados para padrão.', 'success');
-}
-function loadLimitsUI() {
-  document.getElementById('cfg-ivl-min').value = LIMITES.ivl.min;
-  document.getElementById('cfg-ivl-meta').value = LIMITES.ivl.meta;
-  document.getElementById('cfg-ivl-max').value = LIMITES.ivl.max;
-  document.getElementById('cfg-dqo-meta').value = LIMITES.dqo.meta;
-  document.getElementById('cfg-dqo-max').value = LIMITES.dqo.max;
-  document.getElementById('cfg-sst-meta').value = LIMITES.sst.meta;
-  document.getElementById('cfg-sst-max').value = LIMITES.sst.max;
-  document.getElementById('cfg-idade-min').value = LIMITES.idade.min;
-  document.getElementById('cfg-idade-max').value = LIMITES.idade.max;
-  document.getElementById('cfg-am-min').value = LIMITES.am.min;
-  document.getElementById('cfg-am-max').value = LIMITES.am.max;
-  document.getElementById('cfg-volume-tanque').value = LIMITES.volumeTanque;
+function resetLimits(){L={...DEFAULT_L};try{localStorage.removeItem('ete_lim');}catch(e){}loadLimUI();renderAll();toast('Limites restaurados.','ok');}
+function loadLimUI(){
+  document.getElementById('cfg-ivl-min').value=L.ivl.min;
+  document.getElementById('cfg-ivl-meta').value=L.ivl.meta;
+  document.getElementById('cfg-ivl-max').value=L.ivl.max;
+  document.getElementById('cfg-dqo-meta').value=L.dqo.meta;
+  document.getElementById('cfg-dqo-max').value=L.dqo.max;
+  document.getElementById('cfg-sst-meta').value=L.sst.meta;
+  document.getElementById('cfg-sst-max').value=L.sst.max;
+  document.getElementById('cfg-idade-min').value=L.idade.min;
+  document.getElementById('cfg-idade-max').value=L.idade.max;
+  document.getElementById('cfg-am-min').value=L.am.min;
+  document.getElementById('cfg-am-max').value=L.am.max;
+  document.getElementById('cfg-vol-tanque').value=L.vol;
 }
 
-// ════════════════════════════════════════════════════════════════
-// STATE
-// ════════════════════════════════════════════════════════════════
-let sessionData = [...HISTORICAL_DATA];
-let supabaseConfig = {url:'https://maljtjznorewdntctaub.supabase.co', key:'sb_publishable_IfWeqaaqqBFA7aPuSNe_HA_xhAchEob'};
-try {
-  const sb = localStorage.getItem('sb_config'); if(sb) supabaseConfig = JSON.parse(sb);
-  const sbData = sessionStorage.getItem('sb_data');
-  if(sbData) {
-    const dados = JSON.parse(sbData);
-    dados.forEach(r => { const idx = sessionData.findIndex(x=>x.data===r.data); if(idx>=0) sessionData[idx]={...sessionData[idx],...r}; else sessionData.push(r); });
-    sessionData.sort((a,b)=>a.data.localeCompare(b.data));
-  }
-  const sd = localStorage.getItem('session_data');
-  if(sd) { const extra = JSON.parse(sd); extra.forEach(r=>{if(!sessionData.find(x=>x.data===r.data)) sessionData.push(r);}); sessionData.sort((a,b)=>a.data.localeCompare(b.data)); }
-} catch(e){}
+// ── SESSION DATA ─────────────────────────────────────────────────────────────
+let sessData=[...HISTORICAL_DATA];
+try{
+  const sd=localStorage.getItem('sess_data');
+  if(sd){const ex=JSON.parse(sd);ex.forEach(r=>{if(!sessData.find(x=>x.data===r.data))sessData.push(r);});sessData.sort((a,b)=>a.data.localeCompare(b.data));}
+}catch(e){}
 
-// ════════════════════════════════════════════════════════════════
-// FILTRO CENTRAL — CRITICAL FIX: todos os elementos usam isso
-// ════════════════════════════════════════════════════════════════
-function getFilteredData() {
-  const de = document.getElementById('filt-de').value;
-  const ate = document.getElementById('filt-ate').value;
-  return sessionData.filter(r =>
-    (r.vazao_eb != null || r.sst_tanque != null) &&
-    (!de || r.data >= de) &&
-    (!ate || r.data <= ate)
+// ── FILTER ──────────────────────────────────────────────────────────────────
+function getFiltered(){
+  const de=document.getElementById('filt-de').value;
+  const ate=document.getElementById('filt-ate').value;
+  return sessData.filter(r=>
+    (r.vazao_eb!=null||r.sst_tanque!=null)&&
+    (!de||r.data>=de)&&
+    (!ate||r.data<=ate)
   );
 }
-
-function applyFilter() {
-  const de = document.getElementById('filt-de').value;
-  const ate = document.getElementById('filt-ate').value;
-  const isFiltered = de || ate;
-  const notice = document.getElementById('filter-notice');
-  notice.style.display = isFiltered ? 'block' : 'none';
+function applyFilter(){
+  const de=document.getElementById('filt-de').value;
+  const ate=document.getElementById('filt-ate').value;
+  const fb=document.getElementById('fbadge');
+  fb.style.display=(de||ate)?'block':'none';
+  renderAll();
+}
+function clearFilter(){
+  document.getElementById('filt-de').value='';
+  document.getElementById('filt-ate').value='';
+  document.getElementById('fbadge').style.display='none';
   renderAll();
 }
 
-function clearFilter() {
-  document.getElementById('filt-de').value = '';
-  document.getElementById('filt-ate').value = '';
-  document.getElementById('filter-notice').style.display = 'none';
-  renderAll();
-}
-
-// ════════════════════════════════════════════════════════════════
-// CÁLCULO A/M — com diagnóstico automático
-// ════════════════════════════════════════════════════════════════
-function calcAM(row) {
-  // Se tem valor registrado e não é zero, usa
-  if(row.relacao_am != null && row.relacao_am !== 0) return row.relacao_am;
-  // Se tem volume do tanque configurado, calcula automaticamente
-  if(LIMITES.volumeTanque > 0 && row.dqo_eb_kg != null && row.sst_tanque != null && row.sst_tanque > 0) {
-    const massaSST = (row.sst_tanque / 1000) * LIMITES.volumeTanque; // kg
-    if(massaSST > 0) return row.dqo_eb_kg / massaSST;
+// ── A/M CALC ─────────────────────────────────────────────────────────────────
+function calcAM(r){
+  if(r.relacao_am!=null&&r.relacao_am!==0)return r.relacao_am;
+  if(L.vol>0&&r.dqo_eb_kg!=null&&r.sst_tanque!=null&&r.sst_tanque>0){
+    const massaSST=(r.sst_tanque/1000)*L.vol;
+    if(massaSST>0)return r.dqo_eb_kg/massaSST;
   }
   return null;
 }
 
-function checkAMVariation(rows) {
-  const amVals = rows.map(r => calcAM(r)).filter(v => v != null);
-  if(amVals.length < 2) return true; // não há dados suficientes
-  const unique = new Set(amVals.map(v => v.toFixed(4)));
-  return unique.size <= 1; // true = sem variação (problema)
-}
+// ── STATUS ────────────────────────────────────────────────────────────────────
+const fmt=(v,d=1)=>v==null?'—':Number(v).toFixed(d);
+const fmtN=v=>v==null?'—':Math.round(v).toLocaleString('pt-BR');
 
-// ════════════════════════════════════════════════════════════════
-// STATUS FUNCTIONS — usam LIMITES configuráveis
-// ════════════════════════════════════════════════════════════════
-const fmt = (v,d=1) => v==null?'—':Number(v).toFixed(d);
-const fmtInt = v => v==null?'—':Math.round(v).toLocaleString('pt-BR');
+function sIVL(v){if(v==null)return{c:'neutral',t:'—'};if(v<=L.ivl.meta)return{c:'ok',t:'OK'};if(v<=L.ivl.max)return{c:'warn',t:'Alerta'};return{c:'danger',t:'Critico'};}
+function sDQO(v){if(v==null)return{c:'neutral',t:'—'};if(v<=L.dqo.meta)return{c:'ok',t:'OK'};if(v<=L.dqo.max)return{c:'warn',t:'Limite'};return{c:'danger',t:'Alto'};}
+function sSST(v){if(v==null)return{c:'neutral',t:'—'};if(v<=L.sst.meta)return{c:'ok',t:'OK'};if(v<=L.sst.max)return{c:'warn',t:'Limite'};return{c:'danger',t:'Alto'};}
+function sIdade(v){if(v==null)return{c:'neutral',t:'—'};if(v>=L.idade.min&&v<=L.idade.max)return{c:'ok',t:'Ideal'};if(v<L.idade.min)return{c:'warn',t:'Baixo'};return{c:'warn',t:'Alto'};}
+function sAM(v){if(v==null)return{c:'neutral',t:'—'};if(v>=L.am.min&&v<=L.am.max)return{c:'ok',t:'OK'};if(v<L.am.min)return{c:'warn',t:'Baixo'};return{c:'warn',t:'Alto'};}
+function getLatest(){const r=getFiltered();return r[r.length-1]||{};}
 
-function statusIVL(v) {
-  if(v==null) return {cls:'',txt:'—'};
-  if(v<=LIMITES.ivl.meta) return {cls:'ok',txt:'✓ OK'};
-  if(v<=LIMITES.ivl.max)  return {cls:'warn',txt:'⚠ Alto'};
-  return {cls:'danger',txt:'🚨 Crítico'};
-}
-function statusIdade(v) {
-  if(v==null) return {cls:'',txt:'—'};
-  const n = parseFloat(v);
-  if(n>=LIMITES.idade.min && n<=LIMITES.idade.max) return {cls:'ok',txt:'✓ Ideal'};
-  if(n<LIMITES.idade.min) return {cls:'warn',txt:'⚠ Baixo'};
-  return {cls:'warn',txt:'⚠ Alto'};
-}
-function statusDQO(v) {
-  if(v==null) return {cls:'',txt:'—'};
-  if(v<=LIMITES.dqo.meta) return {cls:'ok',txt:'✓ OK'};
-  if(v<=LIMITES.dqo.max)  return {cls:'warn',txt:'⚠ Limite'};
-  return {cls:'danger',txt:'🚨 Alto'};
-}
-function statusSST(v) {
-  if(v==null) return {cls:'',txt:'—'};
-  if(v<=LIMITES.sst.meta) return {cls:'ok',txt:'✓ OK'};
-  if(v<=LIMITES.sst.max)  return {cls:'warn',txt:'⚠ Limite'};
-  return {cls:'danger',txt:'🚨 Alto'};
-}
-function statusAM(v) {
-  if(v==null) return {cls:'',txt:'—'};
-  if(v>=LIMITES.am.min && v<=LIMITES.am.max) return {cls:'ok',txt:'✓ OK'};
-  if(v<LIMITES.am.min) return {cls:'warn',txt:'⚠ Baixo'};
-  return {cls:'warn',txt:'⚠ Alto'};
-}
-
-function getLatestFiltered() {
-  const rows = getFilteredData();
-  return rows[rows.length-1] || {};
-}
-
-// ════════════════════════════════════════════════════════════════
-// TABS
-// ════════════════════════════════════════════════════════════════
-function setTab(name, el) {
-  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+// ── TABS ──────────────────────────────────────────────────────────────────────
+function setTab(name,el){
+  document.querySelectorAll('.tab-pane').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
-  if(el) el.classList.add('active');
-  if(name==='historico') renderTable();
-  if(name==='gerencial') renderGerencial();
+  if(el)el.classList.add('active');
+  if(name==='historico')renderTable();
+  if(name==='gerencial')renderGerencial();
 }
 
-// ════════════════════════════════════════════════════════════════
-// VISÃO GERENCIAL INTELIGENTE
-// ════════════════════════════════════════════════════════════════
-function renderGerencial() {
-  const rows = getFilteredData();
-  if(!rows.length) { document.getElementById('gerencial-cards').innerHTML='<p style="color:var(--muted)">Sem dados no período.</p>'; return; }
-  const latest = rows[rows.length-1];
-  const ivl = latest.ivl_calc || latest.ivl;
-  const dqo = latest.dqo_saida;
-  const sst = latest.sst_efluente;
-  const idadeLodo = parseFloat(latest.idade_lodo);
-  const amVal = calcAM(latest);
+// ── GERENCIAL ─────────────────────────────────────────────────────────────────
+function renderGerencial(){
+  const rows=getFiltered();
+  if(!rows.length){document.getElementById('gcards').innerHTML='<p style="color:var(--muted)">Sem dados no periodo selecionado.</p>';return;}
+  const latest=rows[rows.length-1];
+  const ivl=latest.ivl_calc||latest.ivl;
+  const dqo=latest.dqo_saida;
+  const sst=latest.sst_efluente;
+  const idadeV=parseFloat(latest.idade_lodo);
+  const amV=calcAM(latest);
+  const ivlVals=rows.map(r=>r.ivl_calc||r.ivl).filter(v=>v!=null);
+  const ivlTrend=ivlVals.length>=6?(ivlVals.slice(-3).reduce((a,b)=>a+b,0)/3)-(ivlVals.slice(-6,-3).reduce((a,b)=>a+b,0)/3):0;
 
-  // Tendência IVL (últimos 7 vs anteriores)
-  const ivlVals = rows.map(r=>r.ivl_calc||r.ivl).filter(v=>v!=null);
-  const ivlTrend = ivlVals.length >= 6
-    ? (ivlVals.slice(-3).reduce((a,b)=>a+b,0)/3) - (ivlVals.slice(-6,-3).reduce((a,b)=>a+b,0)/3)
-    : 0;
-  const bulkingRisk = ivl > LIMITES.ivl.meta && ivlTrend > 5;
+  const diags=[];
 
-  // Diagnósticos combinados
-  const diagnosticos = [];
-
-  // IVL
-  if(ivl != null) {
-    if(ivl <= LIMITES.ivl.meta) {
-      diagnosticos.push({icon:'✅',title:'IVL dentro da meta',status:'ok',
-        insight:`IVL atual: <strong>${fmt(ivl,0)} mL/g</strong> — abaixo da meta de ${LIMITES.ivl.meta} mL/g. Lodo com boa sedimentabilidade.`,
-        recos:[]});
-    } else if(ivl <= LIMITES.ivl.max) {
-      diagnosticos.push({icon:'⚠️',title:'IVL elevado — monitorar bulking',status:'warn',
-        insight:`IVL atual: <strong>${fmt(ivl,0)} mL/g</strong> — acima da meta (${LIMITES.ivl.meta}) mas abaixo do crítico (${LIMITES.ivl.max}). ${bulkingRisk?'Tendência de crescimento detectada — risco de bulking filamentoso em desenvolvimento.':'Monitorar evolução.'}`,
-        recos:['Verificar microscopia do lodo','Checar carga orgânica por unidade de biomassa','Avaliar descarte de lodo']});
+  if(ivl!=null){
+    if(ivl<=L.ivl.meta){
+      diags.push({cls:'ok',icon:'[OK]',ttl:'IVL dentro da meta',
+        txt:`IVL atual: <strong>${fmt(ivl,0)} mL/g</strong> — abaixo da meta de ${L.ivl.meta} mL/g. Lodo com boa sedimentabilidade.`,recos:[]});
+    } else if(ivl<=L.ivl.max){
+      diags.push({cls:'warn',icon:'[!]',ttl:'IVL elevado — monitorar bulking',
+        txt:`IVL atual: <strong>${fmt(ivl,0)} mL/g</strong> — acima da meta (${L.ivl.meta}) mas abaixo do critico (${L.ivl.max}). ${ivlTrend>5?'Tendencia de crescimento detectada — risco de bulking filamentoso.':'Monitorar evolucao.'}`,
+        recos:['Verificar microscopia do lodo','Checar carga organica por unidade de biomassa','Avaliar descarte de lodo'],rcls:'attn'});
     } else {
-      diagnosticos.push({icon:'🚨',title:'IVL crítico — risco de arraste de lodo',status:'danger',
-        insight:`IVL atual: <strong>${fmt(ivl,0)} mL/g</strong> — ACIMA do limite crítico (${LIMITES.ivl.max} mL/g). Risco elevado de bulking e perda de biomassa no decantador.`,
-        recos:urgente:['Aumentar taxa de recirculação de lodo','Avaliar descarte emergencial','Microscopia imediata — identificar filamentosas','Checar aporte de nutrientes (N, P)','Verificar pH do tanque']});
+      diags.push({cls:'danger',icon:'[!!]',ttl:'IVL critico — risco de arraste de lodo',
+        txt:`IVL atual: <strong>${fmt(ivl,0)} mL/g</strong> — ACIMA do limite critico (${L.ivl.max} mL/g). Risco elevado de bulking filamentoso e perda de biomassa no decantador.`,
+        recos:['Aumentar taxa de recirculacao de lodo URGENTE','Avaliar descarte emergencial','Microscopia imediata — identificar filamentosas','Checar aporte de nutrientes N e P','Verificar pH do tanque'],rcls:'urg'});
     }
   }
 
-  // Idade do Lodo
-  if(!isNaN(idadeLodo) && idadeLodo > 0) {
-    if(idadeLodo < LIMITES.idade.min) {
-      diagnosticos.push({icon:'⚠️',title:'Idade do lodo baixa — risco de perda de biomassa',status:'warn',
-        insight:`Idade atual: <strong>${fmt(idadeLodo,1)} dias</strong> — abaixo do mínimo ideal (${LIMITES.idade.min} dias). Risco de wash-out de bactérias nitrificantes.`,
-        recos:['Reduzir descarte de lodo temporariamente','Monitorar eficiência de nitrificação','Checar SST do tanque diariamente']});
-    } else if(idadeLodo > LIMITES.idade.max) {
-      diagnosticos.push({icon:'⚠️',title:'Idade do lodo alta — possível acúmulo',status:'warn',
-        insight:`Idade atual: <strong>${fmt(idadeLodo,1)} dias</strong> — acima do ideal (${LIMITES.idade.max} dias). Biomassa excessivamente envelhecida pode comprometer a eficiência.`,
-        recos:['Aumentar descarte de lodo','Monitorar DQO de saída','Verificar consumo de oxigênio']});
+  if(!isNaN(idadeV)&&idadeV>0){
+    if(idadeV<L.idade.min){
+      diags.push({cls:'warn',icon:'[!]',ttl:'Idade do lodo baixa — risco de perda de biomassa',
+        txt:`Idade atual: <strong>${fmt(idadeV,1)} dias</strong> — abaixo do minimo ideal (${L.idade.min} dias). Risco de wash-out de bacterias nitrificantes.`,
+        recos:['Reduzir descarte de lodo temporariamente','Monitorar eficiencia de nitrificacao','Checar SST do tanque diariamente'],rcls:'attn'});
+    } else if(idadeV>L.idade.max){
+      diags.push({cls:'warn',icon:'[!]',ttl:'Idade do lodo alta — possivel acumulo',
+        txt:`Idade atual: <strong>${fmt(idadeV,1)} dias</strong> — acima do ideal (${L.idade.max} dias). Biomassa excessivamente envelhecida pode comprometer eficiencia.`,
+        recos:['Aumentar descarte de lodo','Monitorar DQO de saida','Verificar consumo de oxigenio'],rcls:'attn'});
     } else {
-      diagnosticos.push({icon:'✅',title:'Idade do lodo na faixa ideal',status:'ok',
-        insight:`Idade atual: <strong>${fmt(idadeLodo,1)} dias</strong> — dentro da faixa ideal (${LIMITES.idade.min}–${LIMITES.idade.max} dias).`,
-        recos:[]});
+      diags.push({cls:'ok',icon:'[OK]',ttl:'Idade do lodo na faixa ideal',
+        txt:`Idade atual: <strong>${fmt(idadeV,1)} dias</strong> — dentro da faixa ideal (${L.idade.min}–${L.idade.max} dias).`,recos:[]});
     }
   }
 
-  // DQO
-  if(dqo != null) {
-    if(dqo > LIMITES.dqo.max) {
-      diagnosticos.push({icon:'🚨',title:'DQO de saída elevada',status:'danger',
-        insight:`DQO saída: <strong>${fmt(dqo,0)} mg/L</strong> — acima do limite de ${LIMITES.dqo.max} mg/L. Eficiência de tratamento comprometida.`,
-        recos:['Verificar carga orgânica de entrada','Checar funcionamento do flotador','Aumentar tempo de aeração se possível','Verificar dosagem de coagulante']});
-    } else if(dqo > LIMITES.dqo.meta) {
-      diagnosticos.push({icon:'⚠️',title:'DQO de saída próxima ao limite',status:'warn',
-        insight:`DQO saída: <strong>${fmt(dqo,0)} mg/L</strong> — acima da meta (${LIMITES.dqo.meta} mg/L). Atenção.`,
-        recos:['Monitorar carga orgânica de entrada','Verificar eficiência do flotador']});
-    }
+  if(dqo!=null&&dqo>L.dqo.meta){
+    const cls=dqo>L.dqo.max?'danger':'warn';
+    diags.push({cls,icon:cls==='danger'?'[!!]':'[!]',ttl:`DQO saida ${cls==='danger'?'acima do limite':'proxima ao limite'}`,
+      txt:`DQO saida: <strong>${fmt(dqo,0)} mg/L</strong> — ${cls==='danger'?'acima do limite':'acima da meta'} (${cls==='danger'?L.dqo.max:L.dqo.meta} mg/L).`,
+      recos:cls==='danger'?['Verificar carga organica de entrada','Checar funcionamento do flotador','Aumentar tempo de aeracao','Verificar dosagem de coagulante']:['Monitorar carga organica de entrada','Verificar eficiencia do flotador'],
+      rcls:cls==='danger'?'urg':'attn'});
   }
 
-  // SST Efluente
-  if(sst != null && sst > LIMITES.sst.meta) {
-    diagnosticos.push({icon:'⚠️',title:'SST Efluente acima da meta',status:sst>LIMITES.sst.max?'danger':'warn',
-      insight:`SST efluente: <strong>${fmt(sst,0)} mg/L</strong> — acima da meta de ${LIMITES.sst.meta} mg/L. Possível arraste de sólidos.`,
-      recos:['Verificar decantador — sobrecarga hidráulica?','Checar IVL (lodo com má sedimentabilidade)','Ajustar recirculação']});
+  if(sst!=null&&sst>L.sst.meta){
+    const cls=sst>L.sst.max?'danger':'warn';
+    diags.push({cls,icon:cls==='danger'?'[!!]':'[!]',ttl:'SST Efluente acima da meta',
+      txt:`SST efluente: <strong>${fmt(sst,0)} mg/L</strong> — acima da meta de ${L.sst.meta} mg/L. Possivel arraste de solidos.`,
+      recos:['Verificar decantador — sobrecarga hidraulica?','Checar IVL — lodo com ma sedimentabilidade?','Ajustar recirculacao'],rcls:cls==='danger'?'urg':'attn'});
   }
 
-  // Diagnóstico combinado — síntese
-  const allOk = diagnosticos.every(d=>d.status==='ok');
-  const hasDanger = diagnosticos.some(d=>d.status==='danger');
-  let sistemaStatus, sistemaMsg;
-  if(allOk) { sistemaStatus='ok'; sistemaMsg='Sistema estável — todos indicadores dentro dos parâmetros configurados.'; }
-  else if(hasDanger) { sistemaStatus='danger'; sistemaMsg='Sistema em estado crítico — ação imediata necessária em um ou mais indicadores.'; }
-  else { sistemaStatus='warn'; sistemaMsg='Sistema requer atenção — indicadores fora da meta. Monitorar e agir preventivamente.'; }
+  const allOk=diags.every(d=>d.cls==='ok');
+  const hasDanger=diags.some(d=>d.cls==='danger');
+  const sysCls=allOk?'ok':hasDanger?'danger':'warn';
+  const sysMsg=allOk?'Sistema estavel — todos os indicadores dentro dos parametros configurados.':hasDanger?'Sistema em estado critico — acao imediata necessaria em um ou mais indicadores.':'Sistema requer atencao — indicadores fora da meta. Monitorar e agir preventivamente.';
+  const sysTxt=allOk?'ESTAVEL':hasDanger?'CRITICO':'ATENCAO';
 
-  // Render cards
-  let html = `<div class="gerencial-card status-${sistemaStatus}" style="margin-bottom:20px;">
-    <div class="gerencial-header">
-      <span class="gerencial-icon">${sistemaStatus==='ok'?'🟢':sistemaStatus==='warn'?'🟡':'🔴'}</span>
-      <span class="gerencial-title">Status Geral do Sistema</span>
-      <span class="gerencial-status-badge ${sistemaStatus}">${sistemaStatus==='ok'?'ESTÁVEL':sistemaStatus==='warn'?'ATENÇÃO':'CRÍTICO'}</span>
+  let html=`<div class="gcard ${sysCls}">
+    <div class="gcard-hdr">
+      <span class="gcard-ttl">Status Geral do Sistema</span>
+      <span class="gcard-badge ${sysCls}">${sysTxt}</span>
     </div>
-    <div class="gerencial-insight">${sistemaMsg} <br><small style="color:var(--muted);">Baseado em: ${rows.length} registros · Último: ${latest.data}</small></div>
+    <div class="gcard-txt">${sysMsg} <br><span style="font-size:0.7rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;">${rows.length} registros · ultimo: ${latest.data}</span></div>
   </div>`;
 
-  diagnosticos.forEach(d => {
-    html += `<div class="gerencial-card status-${d.status}">
-      <div class="gerencial-header">
-        <span class="gerencial-icon">${d.icon}</span>
-        <span class="gerencial-title">${d.title}</span>
-        <span class="gerencial-status-badge ${d.status}">${d.status==='ok'?'OK':d.status==='warn'?'ATENÇÃO':'CRÍTICO'}</span>
+  diags.forEach(d=>{
+    const badgeTxt=d.cls==='ok'?'OK':d.cls==='warn'?'ATENCAO':'CRITICO';
+    html+=`<div class="gcard ${d.cls}">
+      <div class="gcard-hdr">
+        <span class="gcard-ttl">${d.icon} ${d.ttl}</span>
+        <span class="gcard-badge ${d.cls}">${badgeTxt}</span>
       </div>
-      <div class="gerencial-insight">${d.insight}</div>
-      ${d.recos&&d.recos.length?`<div class="recomendacoes">${d.recos.map(r=>`<span class="reco-chip ${d.status==='danger'?'urgente':d.status==='warn'?'atencao':''}">${d.status==='danger'?'🚨':d.status==='warn'?'⚠️':'💡'} ${r}</span>`).join('')}</div>`:''}
+      <div class="gcard-txt">${d.txt}</div>
+      ${d.recos.length?`<div class="recos">${d.recos.map(r=>`<span class="reco ${d.rcls||''}">${r}</span>`).join('')}</div>`:''}
     </div>`;
   });
+  document.getElementById('gcards').innerHTML=html;
 
-  document.getElementById('gerencial-cards').innerHTML = html;
+  const todasRecos=diags.flatMap(d=>d.recos);
+  document.getElementById('recos-panel').innerHTML=todasRecos.length
+    ?`<p style="font-size:0.75rem;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin-bottom:10px;">Com base nos indicadores em ${latest.data}:</p><div class="recos">${todasRecos.map(r=>`<span class="reco">${r}</span>`).join('')}</div>`
+    :`<p style="font-size:0.78rem;color:var(--ok);font-family:'IBM Plex Mono',monospace;">Nenhuma acao corretiva necessaria. Sistema operando dentro dos parametros.</p>`;
 
-  // Recomendações consolidadas
-  const todasRecos = diagnosticos.flatMap(d=>d.recos||[]);
-  const recosPanelHTML = todasRecos.length
-    ? `<p style="font-size:0.83rem;color:var(--muted);margin-bottom:12px;">Com base nos indicadores atuais (${latest.data}), as seguintes ações são sugeridas:</p>
-       <div class="recomendacoes">${todasRecos.map(r=>`<span class="reco-chip">💡 ${r}</span>`).join('')}</div>`
-    : `<p style="font-size:0.83rem;color:var(--ok);">✅ Nenhuma ação corretiva necessária. Sistema operando dentro dos parâmetros.</p>`;
-  document.getElementById('recomendacoes-panel').innerHTML = recosPanelHTML;
+  const ivlValids=rows.map(r=>r.ivl_calc||r.ivl).filter(v=>v!=null);
+  const dqoValids=rows.map(r=>r.dqo_saida).filter(v=>v!=null);
+  const sstValids=rows.map(r=>r.sst_efluente).filter(v=>v!=null&&v>0);
+  const avg=arr=>arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:null;
+  const mx=arr=>arr.length?Math.max(...arr):null;
+  const mn=arr=>arr.length?Math.min(...arr):null;
 
-  // Stats
-  const ivlValids = rows.map(r=>r.ivl_calc||r.ivl).filter(v=>v!=null);
-  const dqoValids = rows.map(r=>r.dqo_saida).filter(v=>v!=null);
-  const sstValids = rows.map(r=>r.sst_efluente).filter(v=>v!=null&&v>0);
-  const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null;
-  const mx = arr => arr.length ? Math.max(...arr) : null;
-  const mn = arr => arr.length ? Math.min(...arr) : null;
-
-  const stats = [
-    {label:'IVL Médio', val:fmt(avg(ivlValids),0), unit:'mL/g', sub:`Mín: ${fmt(mn(ivlValids),0)} · Máx: ${fmt(mx(ivlValids),0)}`},
-    {label:'DQO Saída Média', val:fmt(avg(dqoValids),0), unit:'mg/L', sub:`Mín: ${fmt(mn(dqoValids),0)} · Máx: ${fmt(mx(dqoValids),0)}`},
-    {label:'SST Efluente Médio', val:fmt(avg(sstValids),0), unit:'mg/L', sub:`Mín: ${fmt(mn(sstValids),0)} · Máx: ${fmt(mx(sstValids),0)}`},
-    {label:'Dias c/ IVL > Meta', val:ivlValids.filter(v=>v>LIMITES.ivl.meta).length, unit:'dias', sub:`de ${ivlValids.length} com dados`},
-    {label:'Dias c/ DQO > Meta', val:dqoValids.filter(v=>v>LIMITES.dqo.meta).length, unit:'dias', sub:`de ${dqoValids.length} com dados`},
-    {label:'Conformidade IVL', val:ivlValids.length?Math.round(ivlValids.filter(v=>v<=LIMITES.ivl.meta).length/ivlValids.length*100):'—', unit:'%', sub:'dentro da meta'},
+  const stats=[
+    {l:'IVL Medio',v:fmt(avg(ivlVals),0),u:'mL/g',s:`Min: ${fmt(mn(ivlVals),0)} | Max: ${fmt(mx(ivlVals),0)}`},
+    {l:'DQO Saida Media',v:fmt(avg(dqoValids),0),u:'mg/L',s:`Min: ${fmt(mn(dqoValids),0)} | Max: ${fmt(mx(dqoValids),0)}`},
+    {l:'SST Efluente Medio',v:fmt(avg(sstValids),0),u:'mg/L',s:`Min: ${fmt(mn(sstValids),0)} | Max: ${fmt(mx(sstValids),0)}`},
+    {l:'Dias IVL > Meta',v:ivlValids.filter(v=>v>L.ivl.meta).length,u:'dias',s:`de ${ivlValids.length} com dados`},
+    {l:'Dias DQO > Meta',v:dqoValids.filter(v=>v>L.dqo.meta).length,u:'dias',s:`de ${dqoValids.length} com dados`},
+    {l:'Conformidade IVL',v:ivlValids.length?Math.round(ivlValids.filter(v=>v<=L.ivl.meta).length/ivlValids.length*100):'—',u:'%',s:'dentro da meta'},
   ];
-
-  document.getElementById('stats-panel').innerHTML = stats.map(s=>`
-    <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 20px;">
-      <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.7px;margin-bottom:6px;">${s.label}</div>
-      <div style="font-family:'Syne',sans-serif;font-size:1.8rem;font-weight:700;">${s.val} <span style="font-size:0.75rem;color:var(--muted);">${s.unit}</span></div>
-      <div style="font-size:0.72rem;color:var(--muted);margin-top:4px;">${s.sub}</div>
+  document.getElementById('stats-panel').innerHTML=stats.map(s=>`
+    <div class="stat-box">
+      <div class="stat-lbl">${s.l}</div>
+      <div class="stat-val">${s.v}<span class="stat-unit">${s.u}</span></div>
+      <div class="stat-sub">${s.s}</div>
     </div>`).join('');
 }
 
-// ════════════════════════════════════════════════════════════════
-// RENDER ALL — chamado pelo filtro e pelas configurações
-// ════════════════════════════════════════════════════════════════
-let chartInstances = {};
-function destroyChart(id) { if(chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; } }
+// ── RENDER ALL ────────────────────────────────────────────────────────────────
+let charts={};
+function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
 
-function renderAll() {
+function renderAll(){
   renderAlerts();
   renderKPIs();
-  renderDashboardCharts();
+  renderDashCharts();
   renderGauges();
-  renderIndicadoresCharts();
+  renderIndicCharts();
   renderTable();
-  renderGerencial();
   updateMetaLabels();
+  checkAMWarn();
 }
 
-function updateMetaLabels() {
-  document.getElementById('meta-ivl-chart').textContent = `Meta: <${LIMITES.ivl.meta} mL/g — Limite crítico: ${LIMITES.ivl.max} mL/g`;
-  document.getElementById('meta-dqo-chart').textContent = `Meta: <${LIMITES.dqo.meta} mg/L`;
-  document.getElementById('meta-sst-chart').textContent = `SST Tanque · SST Efluente meta <${LIMITES.sst.meta} mg/L`;
+function updateMetaLabels(){
+  document.getElementById('m-ivl').textContent=`Meta < ${L.ivl.meta} mL/g — Critico: ${L.ivl.max} mL/g`;
+  document.getElementById('m-dqo').textContent=`Meta < ${L.dqo.meta} mg/L — Alerta: ${L.dqo.max} mg/L`;
+  document.getElementById('m-sst').textContent=`SST Tanque + SST Efluente — meta efluente < ${L.sst.meta} mg/L`;
+  document.getElementById('m-idade').textContent=`Faixa ideal: ${L.idade.min}–${L.idade.max} dias`;
+  document.getElementById('m-ivl-full').textContent=`Meta < ${L.ivl.meta} mL/g | Critico: ${L.ivl.max} mL/g`;
+  document.getElementById('m-dqosst').textContent=`DQO meta < ${L.dqo.meta} | SST efluente meta < ${L.sst.meta}`;
+  document.getElementById('m-am').textContent=`Meta: ${L.am.min}–${L.am.max} kg DQO/kg SST·d`;
 }
 
-// ════════════════════════════════════════════════════════════════
-// ALERTS BAR
-// ════════════════════════════════════════════════════════════════
-function renderAlerts() {
-  const r = getLatestFiltered();
-  const ivl = r.ivl_calc || r.ivl;
-  const dqo = r.dqo_saida;
-  const sst = r.sst_efluente;
-  const idade = parseFloat(r.idade_lodo);
-  const amVal = calcAM(r);
-  const items = [
-    { label:'IVL', val: ivl?fmt(ivl,0)+' mL/g':'—', ...statusIVL(ivl) },
-    { label:'DQO Saída', val: dqo!=null?fmt(dqo,0)+' mg/L':'—', ...statusDQO(dqo) },
-    { label:'SST Efluente', val: sst!=null?fmt(sst,0)+' mg/L':'—', ...statusSST(sst) },
-    { label:'Idade Lodo', val: !isNaN(idade)&&idade>0?fmt(idade,1)+' dias':'—', ...statusIdade(!isNaN(idade)&&idade>0?idade:null) },
-    { label:'A/M', val: amVal?fmt(amVal,3):'—', ...statusAM(amVal) },
+function checkAMWarn(){
+  const rows=getFiltered();
+  const amVals=rows.map(r=>calcAM(r)).filter(v=>v!=null);
+  const warn=document.getElementById('am-warn');
+  if(amVals.length===0&&L.vol===0){warn.style.display='block';}
+  else{warn.style.display='none';}
+}
+
+// ── ALERTS BAR ────────────────────────────────────────────────────────────────
+function renderAlerts(){
+  const r=getLatest();
+  const ivl=r.ivl_calc||r.ivl;
+  const amV=calcAM(r);
+  const items=[
+    {l:'IVL',v:ivl?fmt(ivl,0)+' mL/g':'—',...sIVL(ivl)},
+    {l:'DQO Saida',v:r.dqo_saida!=null?fmt(r.dqo_saida,0)+' mg/L':'—',...sDQO(r.dqo_saida)},
+    {l:'SST Efluente',v:r.sst_efluente!=null?fmt(r.sst_efluente,0)+' mg/L':'—',...sSST(r.sst_efluente)},
+    {l:'Idade Lodo',v:r.idade_lodo?fmt(r.idade_lodo,1)+' d':'—',...sIdade(r.idade_lodo)},
+    {l:'A/M',v:amV?fmt(amV,3):'—',...sAM(amV)},
   ];
-  document.getElementById('alerts-bar').innerHTML =
-    '<span style="font-size:0.78rem;color:var(--muted);font-weight:600;margin-right:4px;">ALERTAS:</span>'
-    + items.map(i=>`<div class="alert-chip ${i.cls}">${i.txt} <b>${i.label}</b> ${i.val}</div>`).join('');
-
-  // A/M diagnostic alert
-  const rows = getFilteredData();
-  const amProblema = checkAMVariation(rows);
-  const amAlert = document.getElementById('am-alert');
-  if(amProblema && rows.some(r=>r.relacao_am!=null)) {
-    amAlert.style.display='block';
-  } else {
-    amAlert.style.display='none';
-  }
+  document.getElementById('alert-strip').innerHTML=
+    '<span class="alert-strip-label">STATUS:</span>'+
+    items.map(i=>`<div class="achip ${i.c}">${i.t} <b>${i.l}</b> ${i.v}</div>`).join('');
 }
 
-// ════════════════════════════════════════════════════════════════
-// KPIs
-// ════════════════════════════════════════════════════════════════
-function renderKPIs() {
-  const r = getLatestFiltered();
-  const ivl = r.ivl_calc || r.ivl;
-  const amVal = calcAM(r);
-  const kpis = [
-    { label:'IVL', val:ivl?fmt(ivl,0):'—', unit:'mL/g', status:statusIVL(ivl), color:'#00d4aa', trend:`Meta: <${LIMITES.ivl.meta} mL/g` },
-    { label:'SST Tanque', val:r.sst_tanque?fmtInt(r.sst_tanque):'—', unit:'mg/L', status:{cls:'',txt:''}, color:'#4f9cf9', trend:'Sólidos no tanque biológico' },
-    { label:'SS Proveta', val:r.ss_proveta?fmtInt(r.ss_proveta):'—', unit:'mL/L', status:{cls:'',txt:''}, color:'#a78bfa', trend:'Sedimentação 30 min' },
-    { label:'DQO Saída', val:r.dqo_saida!=null?fmt(r.dqo_saida,0):'—', unit:'mg/L', status:statusDQO(r.dqo_saida), color:'#f59e42', trend:`Meta: <${LIMITES.dqo.meta} mg/L` },
-    { label:'SST Efluente', val:r.sst_efluente!=null?fmt(r.sst_efluente,0):'—', unit:'mg/L', status:statusSST(r.sst_efluente), color:'#23d160', trend:`Meta: <${LIMITES.sst.meta} mg/L` },
-    { label:'Vazão EB', val:r.vazao_eb?fmtInt(r.vazao_eb):'—', unit:'m³/dia', status:{cls:'',txt:''}, color:'#38bdf8', trend:'Efluente bruto entrada' },
-    { label:'pH Tanque', val:r.ph_tanque?fmt(r.ph_tanque,2):'—', unit:'', status:{cls:'',txt:''}, color:'#fb7185', trend:'Ideal: 7,5–8,5' },
-    { label:'Relação A/M', val:amVal?fmt(amVal,3):'—', unit:'', status:statusAM(amVal), color:'#fbbf24', trend:`Meta: ${LIMITES.am.min}–${LIMITES.am.max}` },
+// ── KPIs ─────────────────────────────────────────────────────────────────────
+function renderKPIs(){
+  const r=getLatest();
+  const ivl=r.ivl_calc||r.ivl;
+  const amV=calcAM(r);
+  const kpis=[
+    {l:'IVL',v:ivl?fmt(ivl,0):'—',u:'mL/g',s:sIVL(ivl),c:'#00c8a8',sub:`Meta < ${L.ivl.meta}`},
+    {l:'SST Tanque',v:r.sst_tanque?fmtN(r.sst_tanque):'—',u:'mg/L',s:{c:'neutral',t:''},c:'#3d8ef8',sub:'Solidos no tanque biologico'},
+    {l:'SS Proveta',v:r.ss_proveta?fmtN(r.ss_proveta):'—',u:'mL/L',s:{c:'neutral',t:''},c:'#9b7cf8',sub:'Sedimentacao 30 min'},
+    {l:'DQO Saida',v:r.dqo_saida!=null?fmt(r.dqo_saida,0):'—',u:'mg/L',s:sDQO(r.dqo_saida),c:'#f0a030',sub:`Meta < ${L.dqo.meta}`},
+    {l:'SST Efluente',v:r.sst_efluente!=null?fmt(r.sst_efluente,0):'—',u:'mg/L',s:sSST(r.sst_efluente),c:'#28c868',sub:`Meta < ${L.sst.meta}`},
+    {l:'Vazao EB',v:r.vazao_eb?fmtN(r.vazao_eb):'—',u:'m3/dia',s:{c:'neutral',t:''},c:'#38c4f0',sub:'Efluente bruto entrada'},
+    {l:'pH Tanque',v:r.ph_tanque?fmt(r.ph_tanque,2):'—',u:'',s:{c:'neutral',t:''},c:'#f078c8',sub:'Ideal: 7,5–8,5'},
+    {l:'Relacao A/M',v:amV?fmt(amV,3):'—',u:'',s:sAM(amV),c:'#e0c030',sub:`Meta: ${L.am.min}–${L.am.max}`},
   ];
-  document.getElementById('kpi-grid').innerHTML = kpis.map(k=>`
-    <div class="kpi" style="--kpi-color:${k.color};">
-      <div class="kpi-label">${k.label}</div>
-      <div style="display:flex;align-items:baseline;gap:4px;">
-        <div class="kpi-val">${k.val}</div><div class="kpi-unit">${k.unit}</div>
-      </div>
-      ${k.status.txt?`<div class="kpi-status ${k.status.cls}">${k.status.txt}</div>`:''}
-      <div class="kpi-trend">${k.trend}</div>
+  document.getElementById('kpi-grid').innerHTML=kpis.map(k=>`
+    <div class="kpi" style="--kpi-c:${k.c}">
+      <div class="kpi-lbl">${k.l}</div>
+      <div><span class="kpi-val">${k.v}</span><span class="kpi-unit">${k.u}</span></div>
+      ${k.s.t?`<div class="kpi-tag ${k.s.c}">${k.s.t}</div>`:''}
+      <div class="kpi-sub">${k.sub}</div>
     </div>`).join('');
 }
 
-// ════════════════════════════════════════════════════════════════
-// CHART HELPERS
-// ════════════════════════════════════════════════════════════════
-const GRID = {color:'rgba(255,255,255,0.05)'};
-const TICK = {color:'#8b949e',font:{size:10}};
-const TOOLTIP = {backgroundColor:'#1c2330',borderColor:'#2d3748',borderWidth:1,titleColor:'#e6edf3',bodyColor:'#8b949e'};
+// ── CHART HELPERS ─────────────────────────────────────────────────────────────
+const GRID={color:'rgba(255,255,255,0.04)'};
+const TICK={color:'#5a7a90',font:{size:10,family:'IBM Plex Mono'}};
+const TTP={backgroundColor:'#162030',borderColor:'#1e2d3d',borderWidth:1,titleColor:'#dce8f0',bodyColor:'#5a7a90',padding:8};
 
-function makeChart(id, type, labels, datasets, opts={}) {
+function mkChart(id,type,labels,datasets,opts={}){
   destroyChart(id);
-  const ctx = document.getElementById(id)?.getContext('2d');
-  if(!ctx) return;
-  chartInstances[id] = new Chart(ctx, {
-    type, data:{labels,datasets},
+  const ctx=document.getElementById(id)?.getContext('2d');
+  if(!ctx)return;
+  charts[id]=new Chart(ctx,{
+    type,data:{labels,datasets},
     options:{
-      responsive:true, maintainAspectRatio:false,
+      responsive:true,maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
-      plugins:{legend:{labels:{color:'#8b949e',font:{size:11},boxWidth:12,padding:12}},tooltip:TOOLTIP},
-      scales:{x:{grid:GRID,ticks:{...TICK,maxRotation:45,maxTicksLimit:15}},y:{grid:GRID,ticks:TICK}},
+      plugins:{legend:{labels:{color:'#5a7a90',font:{size:10,family:'IBM Plex Mono'},boxWidth:10,padding:10}},tooltip:TTP},
+      scales:{x:{grid:GRID,ticks:{...TICK,maxRotation:45,maxTicksLimit:14}},y:{grid:GRID,ticks:TICK}},
       ...opts
     }
   });
 }
 
-// ════════════════════════════════════════════════════════════════
-// DASHBOARD CHARTS — usam getFilteredData()
-// ════════════════════════════════════════════════════════════════
-function renderDashboardCharts() {
-  const rows = getFilteredData();
-  const labels = rows.map(r=>r.data.slice(5));
+// ── DASHBOARD CHARTS ──────────────────────────────────────────────────────────
+function renderDashCharts(){
+  const rows=getFiltered();
+  const lbl=rows.map(r=>r.data.slice(5));
 
-  makeChart('chartIVL','line',labels,[
-    {label:'IVL (mL/g)',data:rows.map(r=>r.ivl_calc||r.ivl),borderColor:'#00d4aa',backgroundColor:'rgba(0,212,170,0.08)',tension:0.3,fill:true,pointRadius:3,spanGaps:true},
-    {label:`Meta ${LIMITES.ivl.meta}`,data:rows.map(()=>LIMITES.ivl.meta),borderColor:'#23d160',borderDash:[5,5],pointRadius:0,fill:false},
-    {label:`Crítico ${LIMITES.ivl.max}`,data:rows.map(()=>LIMITES.ivl.max),borderColor:'#ff5e57',borderDash:[4,4],pointRadius:0,fill:false}
+  mkChart('cIVL','line',lbl,[
+    {label:'IVL (mL/g)',data:rows.map(r=>r.ivl_calc||r.ivl),borderColor:'#00c8a8',backgroundColor:'rgba(0,200,168,0.07)',tension:0.3,fill:true,pointRadius:2,spanGaps:true},
+    {label:`Meta ${L.ivl.meta}`,data:rows.map(()=>L.ivl.meta),borderColor:'#28c868',borderDash:[5,5],pointRadius:0,fill:false},
+    {label:`Critico ${L.ivl.max}`,data:rows.map(()=>L.ivl.max),borderColor:'#e05050',borderDash:[4,4],pointRadius:0,fill:false}
   ]);
 
-  makeChart('chartIdade','line',labels,[
-    {label:'Idade (dias)',data:rows.map(r=>{const v=parseFloat(r.idade_lodo);return isNaN(v)?null:v;}),borderColor:'#a78bfa',backgroundColor:'rgba(167,139,250,0.08)',tension:0.3,fill:true,pointRadius:3,spanGaps:true},
-    {label:`Mín ${LIMITES.idade.min}`,data:rows.map(()=>LIMITES.idade.min),borderColor:'#f5a623',borderDash:[5,5],pointRadius:0,fill:false},
-    {label:`Máx ${LIMITES.idade.max}`,data:rows.map(()=>LIMITES.idade.max),borderColor:'#ff5e57',borderDash:[4,4],pointRadius:0,fill:false}
+  mkChart('cDQO','line',lbl,[
+    {label:'DQO Saida (mg/L)',data:rows.map(r=>r.dqo_saida),borderColor:'#f0a030',backgroundColor:'rgba(240,160,48,0.07)',tension:0.3,fill:true,pointRadius:2,spanGaps:true},
+    {label:`Meta ${L.dqo.meta}`,data:rows.map(()=>L.dqo.meta),borderColor:'#e05050',borderDash:[5,5],pointRadius:0,fill:false},
+    {label:`Alerta ${L.dqo.max}`,data:rows.map(()=>L.dqo.max),borderColor:'#ff8888',borderDash:[3,3],pointRadius:0,fill:false}
   ]);
 
-  makeChart('chartSST','line',labels,[
-    {label:'SST Tanque (mg/L)',data:rows.map(r=>r.sst_tanque),borderColor:'#4f9cf9',backgroundColor:'rgba(79,156,249,0.08)',tension:0.3,fill:true,pointRadius:2},
-    {label:'SST Efluente (mg/L)',data:rows.map(r=>r.sst_efluente),borderColor:'#23d160',borderDash:[4,4],tension:0.3,fill:false,pointRadius:2,spanGaps:true},
-    {label:`Meta Efluente ${LIMITES.sst.meta}`,data:rows.map(()=>LIMITES.sst.meta),borderColor:'#ff5e57',borderDash:[5,5],pointRadius:0,fill:false}
+  mkChart('cSST','line',lbl,[
+    {label:'SST Tanque (mg/L)',data:rows.map(r=>r.sst_tanque),borderColor:'#3d8ef8',backgroundColor:'rgba(61,142,248,0.07)',tension:0.3,fill:true,pointRadius:2},
+    {label:'SST Efluente (mg/L)',data:rows.map(r=>r.sst_efluente),borderColor:'#28c868',borderDash:[4,4],tension:0.3,fill:false,pointRadius:2,spanGaps:true},
+    {label:`Meta Efluente ${L.sst.meta}`,data:rows.map(()=>L.sst.meta),borderColor:'#e05050',borderDash:[5,5],pointRadius:0,fill:false}
   ]);
 
-  makeChart('chartDQO','line',labels,[
-    {label:'DQO Saída (mg/L)',data:rows.map(r=>r.dqo_saida),borderColor:'#f59e42',backgroundColor:'rgba(245,158,66,0.08)',tension:0.3,fill:true,pointRadius:3},
-    {label:`Meta ${LIMITES.dqo.meta}`,data:rows.map(()=>LIMITES.dqo.meta),borderColor:'#ff5e57',borderDash:[5,5],pointRadius:0,fill:false}
+  mkChart('cIdade','line',lbl,[
+    {label:'Idade Lodo (dias)',data:rows.map(r=>{const v=parseFloat(r.idade_lodo);return isNaN(v)?null:v;}),borderColor:'#9b7cf8',backgroundColor:'rgba(155,124,248,0.07)',tension:0.3,fill:true,pointRadius:3,spanGaps:true},
+    {label:`Min ${L.idade.min}`,data:rows.map(()=>L.idade.min),borderColor:'#e09030',borderDash:[5,5],pointRadius:0,fill:false},
+    {label:`Max ${L.idade.max}`,data:rows.map(()=>L.idade.max),borderColor:'#e05050',borderDash:[4,4],pointRadius:0,fill:false}
   ]);
 
-  // Mixed chart Vazão + DQO
-  destroyChart('chartVazao');
-  const vctx = document.getElementById('chartVazao')?.getContext('2d');
-  if(vctx) chartInstances['chartVazao'] = new Chart(vctx, {
-    data:{labels,datasets:[
-      {type:'bar',label:'Vazão EB (m³/dia)',data:rows.map(r=>r.vazao_eb),backgroundColor:'rgba(56,189,248,0.25)',borderColor:'#38bdf8',borderWidth:1,yAxisID:'y'},
-      {type:'line',label:'DQO EB (kg/dia)',data:rows.map(r=>r.dqo_eb_kg),borderColor:'#f59e42',tension:0.3,pointRadius:2,fill:false,yAxisID:'y2'}
+  destroyChart('cVazao');
+  const ctx=document.getElementById('cVazao')?.getContext('2d');
+  if(ctx)charts['cVazao']=new Chart(ctx,{
+    data:{labels:lbl,datasets:[
+      {type:'bar',label:'Vazao EB (m3/d)',data:rows.map(r=>r.vazao_eb),backgroundColor:'rgba(56,196,240,0.2)',borderColor:'#38c4f0',borderWidth:1,yAxisID:'y'},
+      {type:'line',label:'DQO EB (kg/d)',data:rows.map(r=>r.dqo_eb_kg),borderColor:'#f0a030',tension:0.3,pointRadius:2,fill:false,yAxisID:'y2'}
     ]},
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-      plugins:{legend:{labels:{color:'#8b949e',font:{size:11},boxWidth:12}},tooltip:TOOLTIP},
-      scales:{x:{grid:GRID,ticks:{...TICK,maxRotation:45,maxTicksLimit:15}},
-        y:{grid:GRID,ticks:TICK,position:'left',title:{display:true,text:'m³/dia',color:'#8b949e',font:{size:10}}},
-        y2:{grid:{drawOnChartArea:false},ticks:TICK,position:'right',title:{display:true,text:'kg/dia',color:'#8b949e',font:{size:10}}}}}
+      plugins:{legend:{labels:{color:'#5a7a90',font:{size:10,family:'IBM Plex Mono'},boxWidth:10}},tooltip:TTP},
+      scales:{x:{grid:GRID,ticks:{...TICK,maxRotation:45,maxTicksLimit:14}},
+        y:{grid:GRID,ticks:TICK,position:'left',title:{display:true,text:'m3/dia',color:'#5a7a90',font:{size:10}}},
+        y2:{grid:{drawOnChartArea:false},ticks:TICK,position:'right',title:{display:true,text:'kg/dia',color:'#5a7a90',font:{size:10}}}}}
   });
 }
 
-// ════════════════════════════════════════════════════════════════
-// GAUGES — usam getFilteredData()
-// ════════════════════════════════════════════════════════════════
-function makeDoughnutGauge(id, value, min, max, colorFn, hasData) {
+// ── GAUGES ────────────────────────────────────────────────────────────────────
+function mkGauge(id,value,min,max,colorFn,hasData){
   destroyChart(id);
-  const ctx = document.getElementById(id)?.getContext('2d');
-  if(!ctx) return;
-  const filled = hasData ? Math.min(Math.max((value-min)/(max-min),0.02),1) : 0;
-  const arcColor = hasData ? colorFn(filled) : 'rgba(255,255,255,0.08)';
-  chartInstances[id] = new Chart(ctx, {
+  const ctx=document.getElementById(id)?.getContext('2d');
+  if(!ctx)return;
+  const filled=hasData?Math.min(Math.max((value-min)/(max-min),0.02),1):0;
+  const c=hasData?colorFn(filled):'rgba(255,255,255,0.06)';
+  charts[id]=new Chart(ctx,{
     type:'doughnut',
-    data:{datasets:[{data:[filled,1-filled],backgroundColor:[arcColor,'rgba(255,255,255,0.05)'],borderWidth:0,circumference:180,rotation:270}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},cutout:'72%'}
+    data:{datasets:[{data:[filled,1-filled],backgroundColor:[c,'rgba(255,255,255,0.04)'],borderWidth:0,circumference:180,rotation:270}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},cutout:'70%'}
   });
 }
 
-function renderGauges() {
-  const rows = getFilteredData();
-  function getRecent(field, calcFn) {
-    for(let i=rows.length-1;i>=0;i--) {
-      const v = calcFn ? calcFn(rows[i]) : parseFloat(rows[i][field]);
-      if(!isNaN(v) && v!=null && v>0) return v;
-    }
-    return null;
-  }
-  const ivlVal = getRecent(null, r=>parseFloat(r.ivl_calc||r.ivl));
-  const idadeVal = getRecent('idade_lodo');
-  const amVal = getRecent(null, r=>calcAM(r));
+function renderGauges(){
+  const rows=getFiltered();
+  function getLast(fn){for(let i=rows.length-1;i>=0;i--){const v=fn(rows[i]);if(v!=null&&!isNaN(v)&&v>0)return v;}return null;}
+  const ivlV=getLast(r=>r.ivl_calc||r.ivl);
+  const idadeV=getLast(r=>{const v=parseFloat(r.idade_lodo);return isNaN(v)?null:v;});
+  const amV=getLast(r=>calcAM(r));
 
-  const ivlColor = p => p<0.5?'#23d160':p<0.75?'#f5a623':'#ff5e57';
-  const idadeColor = p => p>0.25&&p<0.75?'#23d160':p>0.1&&p<0.9?'#f5a623':'#ff5e57';
-  const amColor = p => p>0.15&&p<0.75?'#23d160':'#f5a623';
+  mkGauge('gIVL',ivlV||0,L.ivl.min,L.ivl.max*1.6,p=>p<0.5?'#28c868':p<0.75?'#e09030':'#e05050',ivlV!=null);
+  document.getElementById('gn-ivl').textContent=ivlV?fmt(ivlV,0):'—';
+  const si=sIVL(ivlV);
+  document.getElementById('gl-ivl').innerHTML=`<span class="badge ${si.c}">${si.t||'—'}</span> Meta < ${L.ivl.meta}`;
 
-  makeDoughnutGauge('gaugeIVL',ivlVal||0,LIMITES.ivl.min,LIMITES.ivl.max*1.5,ivlColor,ivlVal!=null);
-  document.getElementById('gv-ivl').textContent = ivlVal?fmt(ivlVal,0):'—';
-  const sIVL = statusIVL(ivlVal);
-  document.getElementById('gr-ivl').innerHTML = `<span class="badge ${sIVL.cls}">${sIVL.txt}</span> Meta: <${LIMITES.ivl.meta} mL/g`;
+  mkGauge('gIdade',idadeV||0,0,L.idade.max*1.6,p=>p>0.2&&p<0.7?'#28c868':'#e09030',idadeV!=null);
+  document.getElementById('gn-idade').textContent=idadeV?fmt(idadeV,1):'—';
+  const sid=sIdade(idadeV);
+  document.getElementById('gl-idade').innerHTML=`<span class="badge ${sid.c}">${sid.t||'—'}</span> Ideal: ${L.idade.min}–${L.idade.max} dias`;
 
-  makeDoughnutGauge('gaugeIdade',idadeVal||0,0,LIMITES.idade.max*1.5,idadeColor,idadeVal!=null);
-  document.getElementById('gv-idade').textContent = idadeVal!=null?fmt(idadeVal,1):'—';
-  const sIdade = statusIdade(idadeVal);
-  document.getElementById('gr-idade').innerHTML = `<span class="badge ${sIdade.cls}">${sIdade.txt}</span> Ideal: ${LIMITES.idade.min}–${LIMITES.idade.max} dias`;
-
-  makeDoughnutGauge('gaugeAM',amVal?amVal*100:0,0,LIMITES.am.max*200,amColor,amVal!=null);
-  document.getElementById('gv-am').textContent = amVal!=null?fmt(amVal,3):'—';
-  const sAM = statusAM(amVal);
-  document.getElementById('gr-am').innerHTML = `<span class="badge ${sAM.cls}">${sAM.txt}</span> Meta: ${LIMITES.am.min}–${LIMITES.am.max}`;
+  mkGauge('gAM',amV?amV*1000:0,0,L.am.max*2000,p=>p>0.2&&p<0.7?'#28c868':'#e09030',amV!=null);
+  document.getElementById('gn-am').textContent=amV?fmt(amV,4):'—';
+  const sam=sAM(amV);
+  document.getElementById('gl-am').innerHTML=`<span class="badge ${sam.c}">${sam.t||'—'}</span> Meta: ${L.am.min}–${L.am.max}`;
 }
 
-// ════════════════════════════════════════════════════════════════
-// INDICADORES CHARTS — usam getFilteredData()
-// ════════════════════════════════════════════════════════════════
-function renderIndicadoresCharts() {
-  const rows = getFilteredData();
-  const labels = rows.map(r=>r.data.slice(5));
+// ── INDICADORES CHARTS ────────────────────────────────────────────────────────
+function renderIndicCharts(){
+  const rows=getFiltered();
+  const lbl=rows.map(r=>r.data.slice(5));
 
-  makeChart('chartIVLFull','line',labels,[
-    {label:'IVL (mL/g)',data:rows.map(r=>r.ivl_calc||r.ivl),borderColor:'#00d4aa',backgroundColor:'rgba(0,212,170,0.06)',tension:0.3,fill:true,pointRadius:2,spanGaps:true},
-    {label:`Meta ${LIMITES.ivl.meta}`,data:rows.map(()=>LIMITES.ivl.meta),borderColor:'#23d160',borderDash:[6,4],pointRadius:0,fill:false},
-    {label:`Crítico ${LIMITES.ivl.max}`,data:rows.map(()=>LIMITES.ivl.max),borderColor:'#ff5e57',borderDash:[4,4],pointRadius:0,fill:false}
-  ], {scales:{x:{grid:GRID,ticks:{...TICK,maxRotation:45,maxTicksLimit:20}},y:{grid:GRID,ticks:TICK}}});
+  mkChart('cIVLfull','line',lbl,[
+    {label:'IVL (mL/g)',data:rows.map(r=>r.ivl_calc||r.ivl),borderColor:'#00c8a8',backgroundColor:'rgba(0,200,168,0.05)',tension:0.3,fill:true,pointRadius:2,spanGaps:true},
+    {label:`Meta ${L.ivl.meta}`,data:rows.map(()=>L.ivl.meta),borderColor:'#28c868',borderDash:[6,4],pointRadius:0,fill:false},
+    {label:`Critico ${L.ivl.max}`,data:rows.map(()=>L.ivl.max),borderColor:'#e05050',borderDash:[4,4],pointRadius:0,fill:false}
+  ],{scales:{x:{grid:GRID,ticks:{...TICK,maxRotation:45,maxTicksLimit:20}},y:{grid:GRID,ticks:TICK}}});
 
-  makeChart('chartSSTFull','line',labels,[
-    {label:'SST Tanque (mg/L)',data:rows.map(r=>r.sst_tanque),borderColor:'#4f9cf9',backgroundColor:'rgba(79,156,249,0.06)',tension:0.3,fill:true,pointRadius:2}
+  mkChart('cSSTfull','line',lbl,[
+    {label:'SST Tanque (mg/L)',data:rows.map(r=>r.sst_tanque),borderColor:'#3d8ef8',backgroundColor:'rgba(61,142,248,0.05)',tension:0.3,fill:true,pointRadius:2}
   ]);
 
-  makeChart('chartSSProv','line',labels,[
-    {label:'SS Proveta (mL/L)',data:rows.map(r=>r.ss_proveta),borderColor:'#a78bfa',backgroundColor:'rgba(167,139,250,0.08)',tension:0.3,fill:true,pointRadius:2}
+  mkChart('cSSProv','line',lbl,[
+    {label:'SS Proveta (mL/L)',data:rows.map(r=>r.ss_proveta),borderColor:'#9b7cf8',backgroundColor:'rgba(155,124,248,0.07)',tension:0.3,fill:true,pointRadius:2}
   ]);
 
-  makeChart('chartDQOSST','line',labels,[
-    {label:'DQO Saída (mg/L)',data:rows.map(r=>r.dqo_saida),borderColor:'#f59e42',tension:0.3,fill:false,pointRadius:2},
-    {label:'SST Efluente (mg/L)',data:rows.map(r=>r.sst_efluente),borderColor:'#23d160',borderDash:[4,4],tension:0.3,fill:false,pointRadius:2,spanGaps:true},
-    {label:`DQO Meta ${LIMITES.dqo.meta}`,data:rows.map(()=>LIMITES.dqo.meta),borderColor:'#ff5e57',borderDash:[5,5],pointRadius:0,fill:false}
+  mkChart('cDQOSST','line',lbl,[
+    {label:'DQO Saida (mg/L)',data:rows.map(r=>r.dqo_saida),borderColor:'#f0a030',tension:0.3,fill:false,pointRadius:2,spanGaps:true},
+    {label:'SST Efluente (mg/L)',data:rows.map(r=>r.sst_efluente),borderColor:'#28c868',borderDash:[4,4],tension:0.3,fill:false,pointRadius:2,spanGaps:true},
+    {label:`DQO Meta ${L.dqo.meta}`,data:rows.map(()=>L.dqo.meta),borderColor:'#e05050',borderDash:[5,5],pointRadius:0,fill:false}
   ]);
 
-  makeChart('chartPH','line',labels,[
-    {label:'pH Tanque Nitr.',data:rows.map(r=>r.ph_tanque),borderColor:'#fb7185',tension:0.3,fill:false,pointRadius:2,spanGaps:true},
-    {label:'pH Flotador',data:rows.map(r=>r.ph_flotador),borderColor:'#38bdf8',borderDash:[3,3],tension:0.3,fill:false,pointRadius:2}
+  mkChart('cPH','line',lbl,[
+    {label:'pH Tanque Nitrif.',data:rows.map(r=>r.ph_tanque),borderColor:'#f078c8',tension:0.3,fill:false,pointRadius:2,spanGaps:true},
+    {label:'pH Flotador',data:rows.map(r=>r.ph_flotador&&r.ph_flotador>0?r.ph_flotador:null),borderColor:'#38c4f0',borderDash:[3,3],tension:0.3,fill:false,pointRadius:2},
+    {label:'pH min nitrif. 7.5',data:rows.map(()=>7.5),borderColor:'rgba(224,144,48,0.4)',borderDash:[5,5],pointRadius:0,fill:false},
+    {label:'pH max nitrif. 8.5',data:rows.map(()=>8.5),borderColor:'rgba(224,144,48,0.4)',borderDash:[5,5],pointRadius:0,fill:false}
   ]);
 
-  // A/M chart
-  const amData = rows.map(r => calcAM(r));
-  makeChart('chartAM','line',labels,[
-    {label:'A/M calculado',data:amData,borderColor:'#fbbf24',backgroundColor:'rgba(251,191,36,0.08)',tension:0.3,fill:true,pointRadius:3,spanGaps:true},
-    {label:`Mín ${LIMITES.am.min}`,data:rows.map(()=>LIMITES.am.min),borderColor:'#f5a623',borderDash:[5,5],pointRadius:0,fill:false},
-    {label:`Máx ${LIMITES.am.max}`,data:rows.map(()=>LIMITES.am.max),borderColor:'#ff5e57',borderDash:[4,4],pointRadius:0,fill:false}
+  const amData=rows.map(r=>calcAM(r));
+  mkChart('cAM','line',lbl,[
+    {label:'A/M calculado',data:amData,borderColor:'#e0c030',backgroundColor:'rgba(224,192,48,0.07)',tension:0.3,fill:true,pointRadius:3,spanGaps:true},
+    {label:`Min ${L.am.min}`,data:rows.map(()=>L.am.min),borderColor:'#e09030',borderDash:[5,5],pointRadius:0,fill:false},
+    {label:`Max ${L.am.max}`,data:rows.map(()=>L.am.max),borderColor:'#e05050',borderDash:[4,4],pointRadius:0,fill:false}
+  ]);
+
+  mkChart('cOD','line',lbl,[
+    {label:'OD Nitrificacao (mg/L)',data:rows.map(r=>r.od_nitrificacao),borderColor:'#28c868',backgroundColor:'rgba(40,200,104,0.06)',tension:0.3,fill:true,pointRadius:2,spanGaps:true},
+    {label:'Min ideal 1.5',data:rows.map(()=>1.5),borderColor:'rgba(224,144,48,0.4)',borderDash:[5,5],pointRadius:0,fill:false},
+    {label:'Max ideal 3.0',data:rows.map(()=>3.0),borderColor:'rgba(224,144,48,0.4)',borderDash:[5,5],pointRadius:0,fill:false}
   ]);
 }
 
-// ════════════════════════════════════════════════════════════════
-// TABLE — usa getFilteredData()
-// ════════════════════════════════════════════════════════════════
-function renderTable() {
-  const filtered = getFilteredData();
-  const tbody = document.getElementById('table-body');
-  tbody.innerHTML = [...filtered].reverse().map(r => {
-    const ivl = r.ivl_calc || r.ivl;
-    const si = statusIVL(ivl);
-    const sd = statusDQO(r.dqo_saida);
-    const ss = statusSST(r.sst_efluente);
-    const amVal = calcAM(r);
-    const sAM = statusAM(amVal);
+// ── TABLE ─────────────────────────────────────────────────────────────────────
+function renderTable(){
+  const filtered=getFiltered();
+  document.getElementById('tbl-count').textContent=`${filtered.length} registros`;
+  const tbody=document.getElementById('tbl-body');
+  tbody.innerHTML=[...filtered].reverse().map(r=>{
+    const ivl=r.ivl_calc||r.ivl;
+    const si=sIVL(ivl);const sd=sDQO(r.dqo_saida);const ss=sSST(r.sst_efluente);
+    const amV=calcAM(r);const sam=sAM(amV);
     return `<tr>
       <td>${new Date(r.data+'T00:00').toLocaleDateString('pt-BR')}</td>
-      <td>${fmtInt(r.vazao_eb)}</td><td>${fmt(r.ph_eb,2)}</td>
-      <td>${fmtInt(r.dqo_eb_mg)}</td><td>${fmt(r.dqo_eb_kg,0)}</td>
-      <td>${fmtInt(r.vazao_eq)}</td><td>${fmtInt(r.sst_mab1)}</td><td>${fmtInt(r.sst_mab2)}</td>
-      <td>${fmtInt(r.sst_tanque)}</td><td>${fmtInt(r.ss_proveta)}</td>
-      <td class="${si.cls?'cell-'+si.cls:''}">${ivl?fmt(ivl,0):'—'}</td>
+      <td>${fmtN(r.vazao_eb)}</td><td>${fmt(r.ph_eb,2)}</td>
+      <td>${fmtN(r.dqo_eb_mg)}</td><td>${fmt(r.dqo_eb_kg,0)}</td>
+      <td>${fmtN(r.vazao_eq)}</td><td>${fmtN(r.sst_mab1)}</td><td>${fmtN(r.sst_mab2)}</td>
+      <td>${fmtN(r.sst_tanque)}</td><td>${fmtN(r.ss_proveta)}</td>
+      <td class="${si.c!=='neutral'?'c-'+si.c:''}">${ivl?fmt(ivl,0):'—'}</td>
       <td>${fmt(r.ph_tanque,2)}</td>
-      <td class="${sd.cls?'cell-'+sd.cls:''}">${fmt(r.dqo_saida,0)}</td>
-      <td class="${ss.cls?'cell-'+ss.cls:''}">${fmt(r.sst_efluente,0)}</td>
+      <td class="${sd.c!=='neutral'?'c-'+sd.c:''}">${fmt(r.dqo_saida,0)}</td>
+      <td class="${ss.c!=='neutral'?'c-'+ss.c:''}">${fmt(r.sst_efluente,0)}</td>
       <td>${fmt(r.idade_lodo,1)}</td>
-      <td class="${sAM.cls?'cell-'+sAM.cls:''}">${amVal?fmt(amVal,3):'—'}</td>
-      <td><span class="badge ${si.cls}">${si.txt||'—'}</span></td>
+      <td class="${sam.c!=='neutral'?'c-'+sam.c:''}">${amV?fmt(amV,4):'—'}</td>
+      <td>${fmt(r.od_nitrificacao,1)}</td>
+      <td><span class="badge ${si.c}">${si.t||'—'}</span></td>
     </tr>`;
   }).join('');
 }
 
-// ════════════════════════════════════════════════════════════════
-// CSV EXPORT
-// ════════════════════════════════════════════════════════════════
-function exportCSV() {
-  const filtered = getFilteredData();
-  const header = 'Data,Vazao_EB,pH_EB,DQO_EB_mg,DQO_EB_kg,Vazao_Eq,SST_MAB1,SST_MAB2,SST_Tanque,SS_Proveta,IVL,pH_Tanque,DQO_Saida,SST_Efluente,Idade_Lodo,A_M';
-  const rows = filtered.map(r => [
-    r.data,r.vazao_eb,r.ph_eb,r.dqo_eb_mg,r.dqo_eb_kg,r.vazao_eq,r.sst_mab1,r.sst_mab2,
-    r.sst_tanque,r.ss_proveta,r.ivl_calc||r.ivl,r.ph_tanque,r.dqo_saida,r.sst_efluente,
-    r.idade_lodo,calcAM(r)
-  ].join(','));
-  const blob = new Blob([header+'\n'+rows.join('\n')],{type:'text/csv;charset=utf-8;'});
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-  a.download = 'monitoramento_ete.csv'; a.click();
+// ── CSV EXPORT ────────────────────────────────────────────────────────────────
+function exportCSV(){
+  const f=getFiltered();
+  const hdr='Data,Vazao_EB,pH_EB,DQO_EB_mg,DQO_EB_kg,Vazao_Eq,SST_MAB1,SST_MAB2,SST_Tanque,SS_Proveta,IVL_calc,pH_Tanque,DQO_Saida,SST_Efluente,Idade_Lodo,AM,OD_Nitri';
+  const rows=f.map(r=>[r.data,r.vazao_eb,r.ph_eb,r.dqo_eb_mg,r.dqo_eb_kg,r.vazao_eq,r.sst_mab1,r.sst_mab2,r.sst_tanque,r.ss_proveta,r.ivl_calc||r.ivl,r.ph_tanque,r.dqo_saida,r.sst_efluente,r.idade_lodo,calcAM(r),r.od_nitrificacao].join(','));
+  const blob=new Blob([hdr+'\\n'+rows.join('\\n')],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='monitoramento_ete.csv';a.click();
 }
 
-// ════════════════════════════════════════════════════════════════
-// FORM
-// ════════════════════════════════════════════════════════════════
-document.getElementById('f-data').value = new Date().toISOString().slice(0,10);
-['f-sst_tanque','f-ss_proveta'].forEach(id => {
-  document.getElementById(id).addEventListener('input', () => {
-    const sst = parseFloat(document.getElementById('f-sst_tanque').value);
-    const ss = parseFloat(document.getElementById('f-ss_proveta').value);
-    if(sst>0 && ss>=0) document.getElementById('f-ivl_calc').value = (ss/(sst/1000)).toFixed(1);
+// ── FORM ──────────────────────────────────────────────────────────────────────
+document.getElementById('f-data').value=new Date().toISOString().slice(0,10);
+['f-sst_tanque','f-ss_proveta'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',()=>{
+    const sst=parseFloat(document.getElementById('f-sst_tanque').value);
+    const ss=parseFloat(document.getElementById('f-ss_proveta').value);
+    if(sst>0&&ss>=0)document.getElementById('f-ivl_calc').value=(ss/(sst/1000)).toFixed(1);
   });
 });
 
-async function submitForm() {
-  const data = document.getElementById('f-data').value;
-  if(!data) { showToast('Informe a data do registro.','error'); return; }
-  const record = {
-    data, vazao_eb:nv('f-vazao_eb'), ph_eb:nv('f-ph_eb'),
-    dqo_eb_mg:nv('f-dqo_eb_mg'), dqo_eb_kg:nv('f-dqo_eb_kg'),
-    vazao_eq:nv('f-vazao_eq'), sst_mab1:nv('f-sst_mab1'), sst_mab2:nv('f-sst_mab2'),
-    ph_flotador:nv('f-ph_flotador'), dqo_flotador:null,
-    sst_tanque:nv('f-sst_tanque'), ss_proveta:nv('f-ss_proveta'),
-    ivl_calc:nv('f-ivl_calc'), ph_tanque:nv('f-ph_tanque'),
-    dqo_saida:nv('f-dqo_saida'), sst_efluente:nv('f-sst_efluente'),
-    efic_dqo_flot:nv('f-efic_dqo_flot'), efic_dqo_total:nv('f-efic_dqo_total'),
-    idade_lodo:nv('f-idade_lodo'), ivl:nv('f-ivl_calc'), relacao_am:nv('f-relacao_am'),
+function submitForm(){
+  const data=document.getElementById('f-data').value;
+  if(!data){toast('Informe a data.','err');return;}
+  const record={
+    data,vazao_eb:nv('f-vazao_eb'),ph_eb:nv('f-ph_eb'),dqo_eb_mg:nv('f-dqo_eb_mg'),dqo_eb_kg:nv('f-dqo_eb_kg'),
+    vazao_eq:nv('f-vazao_eq'),sst_mab1:nv('f-sst_mab1'),sst_mab2:nv('f-sst_mab2'),
+    ph_flotador:nv('f-ph_flotador'),dqo_flotador:nv('f-dqo_flotador'),
+    sst_tanque:nv('f-sst_tanque'),ss_proveta:nv('f-ss_proveta'),
+    ivl_calc:nv('f-ivl_calc'),ph_tanque:nv('f-ph_tanque'),
+    od_nitrificacao:nv('f-od_nitri'),idade_lodo:nv('f-idade_lodo'),relacao_am:nv('f-relacao_am'),
+    dqo_saida:nv('f-dqo_saida'),sst_efluente:nv('f-sst_efluente'),
+    efic_dqo_flot:nv('f-efic_flot'),efic_dqo_total:nv('f-efic_total'),
   };
-  const idx = sessionData.findIndex(r=>r.data===data);
-  if(idx>=0) sessionData[idx]={...sessionData[idx],...record};
-  else { sessionData.push(record); sessionData.sort((a,b)=>a.data.localeCompare(b.data)); }
-  try {
-    const extras = sessionData.filter(r=>!HISTORICAL_DATA.find(h=>h.data===r.data));
-    localStorage.setItem('session_data',JSON.stringify(extras));
-  } catch(e){}
-  if(supabaseConfig.url && supabaseConfig.key) {
-    try {
-      const res = await fetch(supabaseConfig.url+'/rest/v1/monitoramento_ete',{
-        method:'POST', headers:{'Content-Type':'application/json','apikey':supabaseConfig.key,'Authorization':'Bearer '+supabaseConfig.key,'Prefer':'resolution=merge-duplicates'},
-        body:JSON.stringify(record)
-      });
-      if(res.ok) showToast('✅ Salvo localmente e no Supabase!','success');
-      else showToast('💾 Salvo localmente. Erro Supabase: '+res.status,'error');
-    } catch(e) { showToast('💾 Salvo localmente. Supabase inacessível.','error'); }
-  } else { showToast('💾 Registro salvo na sessão!','success'); }
+  const idx=sessData.findIndex(r=>r.data===data);
+  if(idx>=0)sessData[idx]={...sessData[idx],...record};
+  else{sessData.push(record);sessData.sort((a,b)=>a.data.localeCompare(b.data));}
+  try{const ex=sessData.filter(r=>!HISTORICAL_DATA.find(h=>h.data===r.data));localStorage.setItem('sess_data',JSON.stringify(ex));}catch(e){}
+  toast('Registro salvo.','ok');
   renderAll();
 }
-function nv(id) { const v=document.getElementById(id)?.value; return(v===''||v==null)?null:parseFloat(v); }
-function clearForm() {
-  document.querySelectorAll('#tab-lancamento input[type=number]').forEach(el=>el.value='');
-  document.getElementById('f-data').value=new Date().toISOString().slice(0,10);
-}
+function clearForm(){document.querySelectorAll('#tab-lancamento input[type=number]').forEach(e=>e.value='');document.getElementById('f-data').value=new Date().toISOString().slice(0,10);}
 
-// ════════════════════════════════════════════════════════════════
-// TEMA
-// ════════════════════════════════════════════════════════════════
-function toggleTema() {
-  const isClaro = document.body.classList.toggle('tema-claro');
-  document.getElementById('btn-tema').textContent = isClaro?'☀️':'🌙';
-  try { localStorage.setItem('tema',isClaro?'claro':'escuro'); } catch(e){}
-}
-(function(){try{if(localStorage.getItem('tema')==='claro'){document.body.classList.add('tema-claro');window.addEventListener('load',()=>{const btn=document.getElementById('btn-tema');if(btn)btn.textContent='☀️';});}}catch(e){}})();
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+function nv(id){const v=document.getElementById(id)?.value;return(v===''||v==null)?null:parseFloat(v);}
+function nf(id,def){const v=parseFloat(document.getElementById(id)?.value);return isNaN(v)?def:v;}
 
-// ════════════════════════════════════════════════════════════════
-// SUPABASE
-// ════════════════════════════════════════════════════════════════
-async function carregarDadosSupabase() {
-  if(!supabaseConfig.url||!supabaseConfig.key) return;
-  if(sessionStorage.getItem('sb_loaded')) return;
-  try {
-    const res = await fetch(supabaseConfig.url+'/rest/v1/monitoramento_ete?select=*&order=data.asc&limit=1000',{headers:{'apikey':supabaseConfig.key,'Authorization':'Bearer '+supabaseConfig.key}});
-    if(!res.ok) return;
-    const dados = await res.json();
-    if(!Array.isArray(dados)||dados.length===0) return;
-    const temNovos = dados.some(r=>!HISTORICAL_DATA.find(h=>h.data===r.data));
-    if(temNovos) {
-      sessionStorage.setItem('sb_loaded','1');
-      sessionStorage.setItem('sb_data',JSON.stringify(dados));
-      location.reload();
-    }
-  } catch(e){ console.warn('Supabase load error:',e); }
-}
-
-// ════════════════════════════════════════════════════════════════
-// TOAST
-// ════════════════════════════════════════════════════════════════
-function showToast(msg, type='success') {
-  const t = document.createElement('div');
+function toast(msg,type='ok'){
+  const t=document.createElement('div');
   t.className='toast '+type;
-  t.innerHTML=(type==='success'?'✅':'⚠️')+' '+msg;
-  document.getElementById('toast-container').appendChild(t);
-  setTimeout(()=>t.remove(),4000);
+  t.textContent=msg;
+  document.getElementById('toast-ct').appendChild(t);
+  setTimeout(()=>t.remove(),3500);
 }
 
-// ════════════════════════════════════════════════════════════════
-// INIT
-// ════════════════════════════════════════════════════════════════
-loadLimitsUI();
-document.getElementById('last-update').textContent = sessionData.length
-  ? 'Último dado: ' + new Date(sessionData[sessionData.length-1].data+'T00:00:00').toLocaleDateString('pt-BR')
-  : '';
-carregarDadosSupabase();
+// ── TEMA ──────────────────────────────────────────────────────────────────────
+function toggleTema(){
+  const isL=document.body.classList.toggle('light');
+  document.getElementById('btn-tema').textContent=isL?'Tema Escuro':'Tema Claro';
+  try{localStorage.setItem('tema',isL?'light':'dark');}catch(e){}
+}
+(function(){try{if(localStorage.getItem('tema')==='light'){document.body.classList.add('light');window.addEventListener('load',()=>{const b=document.getElementById('btn-tema');if(b)b.textContent='Tema Escuro';});}}catch(e){}})();
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+loadLimUI();
+const lastR=sessData[sessData.length-1];
+document.getElementById('last-dt').textContent=lastR?'Ultimo: '+new Date(lastR.data+'T00:00').toLocaleDateString('pt-BR'):'';
 renderAll();
 </script>
 </body>
-</html>
+</html>'''
+
+with open('/home/claude/bi_ete.html', 'w', encoding='utf-8') as f:
+    f.write(html)
+
+print(f"File size: {len(html)} chars")
+PYEOF
+python3 /home/claude/build_bi.py
