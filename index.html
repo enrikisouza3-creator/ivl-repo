@@ -108,12 +108,22 @@ nav button.active{color:var(--accent);border-bottom-color:var(--accent);}
 .chart-filter-stats{font-size:0.68rem;color:var(--muted);margin-left:auto;}
 
 /* ALERTS */
-.alerts-bar{background:var(--panel2);border:1px solid var(--border);border-radius:12px;
-  padding:14px 20px;margin-bottom:20px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
-.alert-chip{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:0.78rem;font-weight:600;}
-.alert-chip.ok{background:rgba(35,209,96,0.1);border:1px solid rgba(35,209,96,0.3);color:var(--ok);}
-.alert-chip.warn{background:rgba(245,166,35,0.1);border:1px solid rgba(245,166,35,0.3);color:var(--warn);}
-.alert-chip.danger{background:rgba(255,94,87,0.1);border:1px solid rgba(255,94,87,0.3);color:var(--danger);}
+.alerts-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-bottom:24px;}
+.alert-chip{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px 16px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;min-height:96px;}
+.alert-chip .chip-label{font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;}
+.alert-chip .chip-val{font-size:1.3rem;font-weight:800;}
+.alert-chip .chip-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:0.74rem;font-weight:700;}
+.alert-chip.ok .chip-badge{background:rgba(35,209,96,0.1);border:1px solid rgba(35,209,96,0.3);color:var(--ok);}
+.alert-chip.ok .chip-val{color:var(--ok);}
+.alert-chip.warn .chip-badge{background:rgba(245,166,35,0.1);border:1px solid rgba(245,166,35,0.3);color:var(--warn);}
+.alert-chip.warn .chip-val{color:var(--warn);}
+.alert-chip.danger .chip-badge{background:rgba(255,94,87,0.1);border:1px solid rgba(255,94,87,0.3);color:var(--danger);}
+.alert-chip.danger .chip-val{color:var(--danger);}
+.alert-chip.neutral .chip-badge{background:rgba(255,255,255,0.06);border:1px solid var(--border);color:var(--muted);}
+.alert-chip.neutral .chip-val{color:var(--text);}
+@media(max-width:900px){.alerts-bar{grid-template-columns:1fr 1fr;}}
+@media(max-width:600px){.alerts-bar{grid-template-columns:1fr;}}
 
 /* SECTION TITLE */
 .section-title{font-family:'Syne',sans-serif;font-weight:700;font-size:1rem;
@@ -254,7 +264,6 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 
 <!-- ===== DASHBOARD ===== -->
 <div id="tab-dashboard" class="tab-content active dash">
-  <div id="alerts-bar" class="alerts-bar"></div>
   <div class="kpi-grid" id="kpi-grid"></div>
 
   <div class="section-title">Cobertura de Dados</div>
@@ -374,6 +383,8 @@ tr:hover td{background:rgba(255,255,255,0.02);}
       <div class="gauge-range" id="gr-am"></div>
     </div>
   </div>
+
+  <div id="alerts-bar" class="alerts-bar"></div>
 </div>
 
 <!-- ===== INDICADORES ===== -->
@@ -799,18 +810,36 @@ const totalRecs=getAll().length;
 document.getElementById('last-update').textContent=latest.data?'Último dado: '+new Date(latest.data+'T00:00:00').toLocaleDateString('pt-BR')+' · '+totalRecs+' registros':'';
 
 // ─── ALERTS ───────────────────────────────────────────────────────────
+function getLatestValid(field){
+  const rows=getAll();
+  for(let i=rows.length-1;i>=0;i--){
+    const v=parseFloat(rows[i][field]);
+    if(!isNaN(v)) return {val:v, data:rows[i].data};
+  }
+  return {val:null, data:null};
+}
+
 function renderAlerts(){
   const r=getLatest();
   const ivl=r.ivl_calc||r.ivl;
+  const dqoSaida=getLatestValid('dqo_saida');
+  const sstEf=getLatestValid('sst_efluente');
+  const idade=getLatestValid('idade_lodo');
+
   const items=[
     {label:'IVL',...statusIVL(ivl),val:ivl?fmt(ivl,0)+' mL/g':'—'},
-    {label:'DQO Saída',...statusDQO(r.dqo_saida),val:r.dqo_saida?fmt(r.dqo_saida,0)+' mg/L':'—'},
-    {label:'SST Efluente',...statusSST(r.sst_efluente),val:r.sst_efluente!=null?fmt(r.sst_efluente,0)+' mg/L':'—'},
-    {label:'Idade do Lodo',...statusIdade(parseFloat(r.idade_lodo)),val:r.idade_lodo?fmt(r.idade_lodo)+' dias':'—'},
+    {label:'DQO Saída',...statusDQO(dqoSaida.val),val:dqoSaida.val!=null?fmt(dqoSaida.val,0)+' mg/L':'—'},
+    {label:'SST Efluente',...statusSST(sstEf.val),val:sstEf.val!=null?fmt(sstEf.val,0)+' mg/L':'—'},
+    {label:'Idade do Lodo',...statusIdade(idade.val),val:idade.val!=null?fmt(idade.val,1)+' dias':'—'},
   ];
-  document.getElementById('alerts-bar').innerHTML=
-    '<span style="font-size:0.78rem;color:var(--muted);font-weight:600;margin-right:4px;">STATUS:</span>'
-    +items.map(i=>`<div class="alert-chip ${i.cls}">${i.txt} <b>${i.label}</b> ${i.val}</div>`).join('');
+  document.getElementById('alerts-bar').innerHTML = items.map(i=>{
+    const cls = i.cls || 'neutral';
+    return `<div class="alert-chip ${cls}">
+      <div class="chip-label">${i.label}</div>
+      <div class="chip-val">${i.val}</div>
+      <div class="chip-badge">${i.txt}</div>
+    </div>`;
+  }).join('');
 }
 
 // ─── KPIs ─────────────────────────────────────────────────────────────
