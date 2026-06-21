@@ -132,22 +132,16 @@ nav button.active{color:var(--accent);border-bottom-color:var(--accent);}
 
 /* GAUGE */
 .gauge-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-bottom:24px;}
-.kpi5-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;text-align:center;display:flex;flex-direction:column;justify-content:center;}
-.kpi5-title{font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px;}
-.kpi5-val{font-size:2.1rem;font-weight:800;line-height:1;}
-.kpi5-unit{font-size:0.78rem;color:var(--muted);margin-top:2px;margin-bottom:10px;}
-.kpi5-trend{font-size:0.72rem;display:flex;align-items:center;justify-content:center;gap:4px;color:var(--muted);}
-.kpi5-trend.up{color:#f5a623;}
-.kpi5-trend.down{color:#23d160;}
-.kpi5-trend.flat{color:var(--muted);}
-.kpi5-n{font-size:0.66rem;color:var(--muted);margin-top:6px;opacity:0.7;}
-.gauge-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;text-align:center;}
+.gauge-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;text-align:center;display:flex;flex-direction:column;}
 .gauge-title{font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px;}
 .gauge-wrap{position:relative;height:140px;}
 .gauge-center{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);text-align:center;}
 .gauge-val{font-family:'Syne',sans-serif;font-size:1.6rem;font-weight:800;}
 .gauge-unit{font-size:0.72rem;color:var(--muted);}
-.gauge-range{font-size:0.7rem;color:var(--muted);margin-top:6px;}
+.gauge-range{font-size:0.7rem;color:var(--muted);margin-top:6px;min-height:18px;}
+.gauge-trend{font-size:0.68rem;margin-top:4px;color:var(--muted);}
+.gauge-trend.up{color:var(--warn);}
+.gauge-trend.down{color:var(--ok);}
 
 /* TABLE */
 .table-wrap{background:var(--panel);border:1px solid var(--border);border-radius:14px;overflow:auto;max-height:500px;}
@@ -264,6 +258,43 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 
 <!-- ===== DASHBOARD ===== -->
 <div id="tab-dashboard" class="tab-content active dash">
+  <div class="section-title"> Medidores — Último Registro</div>
+  <div class="gauge-grid">
+    <div class="gauge-card">
+      <div class="gauge-title">IVL (mL/g)</div>
+      <div class="gauge-wrap"><canvas id="gaugeIVL"></canvas>
+        <div class="gauge-center"><div class="gauge-val" id="gv-ivl">—</div><div class="gauge-unit">mL/g</div></div>
+      </div>
+      <div class="gauge-range" id="gr-ivl"></div>
+    </div>
+    <div class="gauge-card">
+      <div class="gauge-title">Idade do Lodo (dias)</div>
+      <div class="gauge-wrap"><canvas id="gaugeIdade"></canvas>
+        <div class="gauge-center"><div class="gauge-val" id="gv-idade">—</div><div class="gauge-unit">dias</div></div>
+      </div>
+      <div class="gauge-range" id="gr-idade"></div>
+    </div>
+    <div class="gauge-card">
+      <div class="gauge-title">Idade do Lodo — Média 5d</div>
+      <div class="gauge-wrap"><canvas id="gaugeIdade5d"></canvas>
+        <div class="gauge-center"><div class="gauge-val" id="gv-idade5d">—</div><div class="gauge-unit">dias (média)</div></div>
+      </div>
+      <div class="gauge-range">
+        <span id="kpi5-idade-trend">—</span>
+        <div class="gauge-trend" id="kpi5-idade-n"></div>
+      </div>
+    </div>
+    <div class="gauge-card">
+      <div class="gauge-title">Relação A/M</div>
+      <div class="gauge-wrap"><canvas id="gaugeAM"></canvas>
+        <div class="gauge-center"><div class="gauge-val" id="gv-am">—</div><div class="gauge-unit">kg DQO/kg SST·d</div></div>
+      </div>
+      <div class="gauge-range" id="gr-am"></div>
+    </div>
+  </div>
+
+  <div id="alerts-bar" class="alerts-bar"></div>
+
   <div class="kpi-grid" id="kpi-grid"></div>
 
   <div class="section-title">Cobertura de Dados</div>
@@ -351,40 +382,6 @@ tr:hover td{background:rgba(255,255,255,0.02);}
     </div>
 
   </div>
-
-  <div class="section-title"> Medidores — Último Registro</div>
-  <div class="gauge-grid">
-    <div class="gauge-card">
-      <div class="gauge-title">IVL (mL/g)</div>
-      <div class="gauge-wrap"><canvas id="gaugeIVL"></canvas>
-        <div class="gauge-center"><div class="gauge-val" id="gv-ivl">—</div><div class="gauge-unit">mL/g</div></div>
-      </div>
-      <div class="gauge-range" id="gr-ivl"></div>
-    </div>
-    <div class="gauge-card">
-      <div class="gauge-title">Idade do Lodo (dias)</div>
-      <div class="gauge-wrap"><canvas id="gaugeIdade"></canvas>
-        <div class="gauge-center"><div class="gauge-val" id="gv-idade">—</div><div class="gauge-unit">dias</div></div>
-      </div>
-      <div class="gauge-range" id="gr-idade"></div>
-    </div>
-    <div class="kpi5-card">
-      <div class="kpi5-title">Idade do Lodo — Média 5d</div>
-      <div class="kpi5-val" id="kpi5-idade-val">—</div>
-      <div class="kpi5-unit">dias (média móvel)</div>
-      <div class="kpi5-trend" id="kpi5-idade-trend">—</div>
-      <div class="kpi5-n" id="kpi5-idade-n"></div>
-    </div>
-    <div class="gauge-card">
-      <div class="gauge-title">Relação A/M</div>
-      <div class="gauge-wrap"><canvas id="gaugeAM"></canvas>
-        <div class="gauge-center"><div class="gauge-val" id="gv-am">—</div><div class="gauge-unit">kg DQO/kg SST·d</div></div>
-      </div>
-      <div class="gauge-range" id="gr-am"></div>
-    </div>
-  </div>
-
-  <div id="alerts-bar" class="alerts-bar"></div>
 </div>
 
 <!-- ===== INDICADORES ===== -->
@@ -1148,6 +1145,15 @@ function rebuildChart(key){
 }
 
 // ─── GAUGE ────────────────────────────────────────────────────────────
+function makeGauge(id,value,min,max,colorFn,hasData){
+  destroyChart(id);
+  const ctx=document.getElementById(id)?.getContext('2d');if(!ctx)return;
+  const filled=hasData?Math.min(Math.max((value-min)/(max-min),0.02),1):0;
+  const empty=1-filled;
+  const arcColor=hasData?colorFn(filled):'rgba(255,255,255,0.08)';
+  CHART_REG[id]=new Chart(ctx,{type:'doughnut',data:{datasets:[{data:[filled,empty],backgroundColor:[arcColor,'rgba(255,255,255,0.05)'],borderWidth:0,circumference:180,rotation:270}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},cutout:'72%'}});
+}
+
 function renderGauges(){
   const r=getLatest();
   const ivl=r.ivl_calc||r.ivl;
@@ -1157,15 +1163,6 @@ function renderGauges(){
   }
   const idadeVal=getRecent('idade_lodo');
   const amVal=getRecent('relacao_am');
-
-  function makeGauge(id,value,min,max,colorFn,hasData){
-    destroyChart(id);
-    const ctx=document.getElementById(id)?.getContext('2d');if(!ctx)return;
-    const filled=hasData?Math.min(Math.max((value-min)/(max-min),0.02),1):0;
-    const empty=1-filled;
-    const arcColor=hasData?colorFn(filled):'rgba(255,255,255,0.08)';
-    CHART_REG[id]=new Chart(ctx,{type:'doughnut',data:{datasets:[{data:[filled,empty],backgroundColor:[arcColor,'rgba(255,255,255,0.05)'],borderWidth:0,circumference:180,rotation:270}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},cutout:'72%'}});
-  }
 
   makeGauge('gaugeIVL',ivl||0,CFG.ivlMin,CFG.ivlMax,p=>p<0.5?'#23d160':p<0.75?'#f5a623':'#ff5e57',ivl!=null);
   document.getElementById('gv-ivl').textContent=ivl?fmt(ivl,0):'—';
@@ -1190,13 +1187,16 @@ function renderIdade5d(){
   const rows=getAll().slice().sort((a,b)=>a.data.localeCompare(b.data));
   const valid=rows.filter(r=>{const v=parseFloat(r.idade_lodo);return !isNaN(v)&&v>0;});
 
-  const valEl=document.getElementById('kpi5-idade-val');
+  const valEl=document.getElementById('gv-idade5d');
   const trendEl=document.getElementById('kpi5-idade-trend');
   const nEl=document.getElementById('kpi5-idade-n');
   if(!valEl) return;
 
   if(valid.length===0){
-    valEl.textContent='—'; trendEl.textContent='Sem dados suficientes'; trendEl.className='kpi5-trend'; nEl.textContent='';
+    valEl.textContent='—';
+    trendEl.textContent='Sem dados suficientes';
+    nEl.textContent='';
+    makeGauge('gaugeIdade5d',0,0,40,()=>'#23d160',false);
     return;
   }
 
@@ -1204,27 +1204,26 @@ function renderIdade5d(){
   const avg5=last5.reduce((s,r)=>s+parseFloat(r.idade_lodo),0)/last5.length;
 
   valEl.textContent=fmt(avg5,1);
+  makeGauge('gaugeIdade5d',avg5,0,40,p=>p>0.25&&p<0.75?'#23d160':p>0.1&&p<0.9?'#f5a623':'#ff5e57',true);
 
   const prev=valid.slice(-10,-5);
   if(prev.length>=2){
     const avgPrev=prev.reduce((s,r)=>s+parseFloat(r.idade_lodo),0)/prev.length;
     const delta=avg5-avgPrev;
     const pct=avgPrev!==0?(delta/avgPrev*100):0;
-    let cls='flat',arrow='→',txt='Estável';
+    let cls='',arrow='→',txt='Estável';
     if(Math.abs(pct)>=5){
       if(delta>0){cls='up';arrow='↑';txt=`Subindo ${fmt(Math.abs(pct),0)}%`;}
       else{cls='down';arrow='↓';txt=`Caindo ${fmt(Math.abs(pct),0)}%`;}
     }
-    trendEl.className='kpi5-trend '+cls;
-    trendEl.innerHTML=`${arrow} ${txt} vs 5d anteriores`;
+    trendEl.innerHTML=`<span class="badge ${cls==='up'?'warn':cls==='down'?'ok':''}">${arrow} ${txt}</span>`;
   } else {
-    trendEl.className='kpi5-trend';
     trendEl.textContent='Histórico insuficiente p/ tendência';
   }
 
   nEl.textContent = last5.length<5
     ? `⚠ apenas ${last5.length}/5 dias com leitura válida`
-    : `baseado em ${last5[0].data} → ${last5[last5.length-1].data}`;
+    : `${last5[0].data} → ${last5[last5.length-1].data}`;
 }
 
 // ─── EFICIÊNCIA SUMMARY ───────────────────────────────────────────────
