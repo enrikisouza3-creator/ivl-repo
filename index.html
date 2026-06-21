@@ -121,7 +121,16 @@ nav button.active{color:var(--accent);border-bottom-color:var(--accent);}
 .section-title::after{content:'';flex:1;height:1px;background:var(--border);}
 
 /* GAUGE */
-.gauge-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-bottom:24px;}
+.gauge-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-bottom:24px;}
+.kpi5-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;text-align:center;display:flex;flex-direction:column;justify-content:center;}
+.kpi5-title{font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px;}
+.kpi5-val{font-size:2.1rem;font-weight:800;line-height:1;}
+.kpi5-unit{font-size:0.78rem;color:var(--muted);margin-top:2px;margin-bottom:10px;}
+.kpi5-trend{font-size:0.72rem;display:flex;align-items:center;justify-content:center;gap:4px;color:var(--muted);}
+.kpi5-trend.up{color:#f5a623;}
+.kpi5-trend.down{color:#23d160;}
+.kpi5-trend.flat{color:var(--muted);}
+.kpi5-n{font-size:0.66rem;color:var(--muted);margin-top:6px;opacity:0.7;}
 .gauge-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;text-align:center;}
 .gauge-title{font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px;}
 .gauge-wrap{position:relative;height:140px;}
@@ -349,6 +358,13 @@ tr:hover td{background:rgba(255,255,255,0.02);}
         <div class="gauge-center"><div class="gauge-val" id="gv-idade">—</div><div class="gauge-unit">dias</div></div>
       </div>
       <div class="gauge-range" id="gr-idade"></div>
+    </div>
+    <div class="kpi5-card">
+      <div class="kpi5-title">Idade do Lodo — Média 5d</div>
+      <div class="kpi5-val" id="kpi5-idade-val">—</div>
+      <div class="kpi5-unit">dias (média móvel)</div>
+      <div class="kpi5-trend" id="kpi5-idade-trend">—</div>
+      <div class="kpi5-n" id="kpi5-idade-n"></div>
     </div>
     <div class="gauge-card">
       <div class="gauge-title">Relação A/M</div>
@@ -1132,10 +1148,54 @@ function renderGauges(){
   const sid=statusIdade(idadeVal);
   document.getElementById('gr-idade').innerHTML=`<span class="badge ${sid.cls}">${sid.txt}</span> Ideal: ${CFG.idadeMin}–${CFG.idadeMax} dias`;
 
+  renderIdade5d();
+
   makeGauge('gaugeAM',amVal||0,0,CFG.amMax*2,p=>p>0.15&&p<0.75?'#23d160':'#f5a623',amVal!=null);
   document.getElementById('gv-am').textContent=amVal!=null?fmt(amVal,3):'—';
   const sam=statusAM(amVal);
   document.getElementById('gr-am').innerHTML=`<span class="badge ${sam.cls}">${sam.txt}</span> Meta: ${CFG.amMin}–${CFG.amMax}`;
+}
+
+// ─── KPI: IDADE DO LODO — MÉDIA MÓVEL 5 DIAS ───────────────────────────
+function renderIdade5d(){
+  const rows=getAll().slice().sort((a,b)=>a.data.localeCompare(b.data));
+  const valid=rows.filter(r=>{const v=parseFloat(r.idade_lodo);return !isNaN(v)&&v>0;});
+
+  const valEl=document.getElementById('kpi5-idade-val');
+  const trendEl=document.getElementById('kpi5-idade-trend');
+  const nEl=document.getElementById('kpi5-idade-n');
+  if(!valEl) return;
+
+  if(valid.length===0){
+    valEl.textContent='—'; trendEl.textContent='Sem dados suficientes'; trendEl.className='kpi5-trend'; nEl.textContent='';
+    return;
+  }
+
+  const last5=valid.slice(-5);
+  const avg5=last5.reduce((s,r)=>s+parseFloat(r.idade_lodo),0)/last5.length;
+
+  valEl.textContent=fmt(avg5,1);
+
+  const prev=valid.slice(-10,-5);
+  if(prev.length>=2){
+    const avgPrev=prev.reduce((s,r)=>s+parseFloat(r.idade_lodo),0)/prev.length;
+    const delta=avg5-avgPrev;
+    const pct=avgPrev!==0?(delta/avgPrev*100):0;
+    let cls='flat',arrow='→',txt='Estável';
+    if(Math.abs(pct)>=5){
+      if(delta>0){cls='up';arrow='↑';txt=`Subindo ${fmt(Math.abs(pct),0)}%`;}
+      else{cls='down';arrow='↓';txt=`Caindo ${fmt(Math.abs(pct),0)}%`;}
+    }
+    trendEl.className='kpi5-trend '+cls;
+    trendEl.innerHTML=`${arrow} ${txt} vs 5d anteriores`;
+  } else {
+    trendEl.className='kpi5-trend';
+    trendEl.textContent='Histórico insuficiente p/ tendência';
+  }
+
+  nEl.textContent = last5.length<5
+    ? `⚠ apenas ${last5.length}/5 dias com leitura válida`
+    : `baseado em ${last5[0].data} → ${last5[last5.length-1].data}`;
 }
 
 // ─── EFICIÊNCIA SUMMARY ───────────────────────────────────────────────
