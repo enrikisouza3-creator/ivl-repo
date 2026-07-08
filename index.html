@@ -703,6 +703,39 @@ let CFG = {...DEF_CFG};
 try{const s=localStorage.getItem('ete_cfg');if(s)CFG={...DEF_CFG,...JSON.parse(s)};}catch(e){}
 try{const sd=localStorage.getItem('ete_sess');if(sd){const ex=JSON.parse(sd);ex.forEach(r=>{if(!sessionData.find(x=>x.data===r.data))sessionData.push(r);});sessionData.sort((a,b)=>a.data.localeCompare(b.data));}}catch(e){}
 
+// DADOS.JSON - fonte externa atualizável sem reimplantar o site.
+// Registros do dados.json sobrescrevem os do HISTORICAL_DATA com a mesma "data";
+// o merge com localStorage (colar dados) roda de novo por cima, para não perder sessão local.
+let dadosJsonInfo = null;
+async function loadDadosJson(){
+ try{
+ const resp = await fetch('dados.json', {cache:'no-store'});
+ if(!resp.ok) return;
+ const j = await resp.json();
+ dadosJsonInfo = j;
+ if(Array.isArray(j.dados) && j.dados.length){
+ j.dados.forEach(r=>{
+ const idx = sessionData.findIndex(x=>x.data===r.data);
+ if(idx>=0) sessionData[idx]=r; else sessionData.push(r);
+ });
+ sessionData.sort((a,b)=>a.data.localeCompare(b.data));
+ }
+ try{
+ const sd=localStorage.getItem('ete_sess');
+ if(sd){
+ const ex=JSON.parse(sd);
+ ex.forEach(r=>{
+ const idx = sessionData.findIndex(x=>x.data===r.data);
+ if(idx>=0) sessionData[idx]=r; else sessionData.push(r);
+ });
+ sessionData.sort((a,b)=>a.data.localeCompare(b.data));
+ }
+ }catch(e){}
+ }catch(e){
+ console.warn('Não foi possível carregar dados.json (usando dados embutidos):', e);
+ }
+}
+
 const CHART_REG = {};
 
 // UTILS 
@@ -1372,15 +1405,16 @@ function renderAll(){
 }
 
 // INIT 
-(function(){
+(async function(){
+ await loadDadosJson();
  const ms=getMonthStart(),ld=getLastDate();
  document.querySelectorAll('input[type=date][id$="-de"]').forEach(el=>{if(!el.value)el.value=ms;});
  document.querySelectorAll('input[type=date][id$="-ate"]').forEach(el=>{if(!el.value)el.value=ld;});
  const fde=document.getElementById('filt-de'),fate=document.getElementById('filt-ate');
  if(fde&&!fde.value)fde.value=ms;if(fate&&!fate.value)fate.value=ld;
  updateLabels();
+ renderAll();
 })();
-renderAll();
 </script>
 </body>
 </html>
