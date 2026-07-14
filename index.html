@@ -1427,7 +1427,6 @@ function renderAll(){
  updateLabels();
  renderTab(activeTabName());
 }
-
 // INIT 
 (async function(){
  await loadDadosJson();
@@ -1438,7 +1437,10 @@ function renderAll(){
  if(fde&&!fde.value)fde.value=ms;if(fate&&!fate.value)fate.value=ld;
  updateLabels();
  renderAll();
+ 
+ // AUTO-REFRESH: recarrega dados.json a cada 10s e atualiza a aba visível
+ setInterval(async ()=>{
+  await loadDadosJson();
+  renderAll();
+ },10000);
 })();
-</script>
-</body>
-</html>
