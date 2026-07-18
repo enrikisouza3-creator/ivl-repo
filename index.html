@@ -753,6 +753,9 @@ function getRows(de='',ate=''){
  });
 }
 function getAll(){return getRows();}
+// ✅ CORREÇÃO: Nova função que retorna o ÚLTIMO REGISTRO independente de vazao_eb
+// Usada para KPIs, Alertas e Gauges (que precisam dos dados mais recentes)
+function getLatestAllData(){const r=sessionData.filter(rec=>!rec.data||rec.data<=''+new Date().toISOString().slice(0,10));return r[r.length-1]||{};}
 function getLatest(){const r=getAll();return r[r.length-1]||{};}
 function getLastValid(field){const rows=getAll();for(let i=rows.length-1;i>=0;i--){const v=parseFloat(rows[i][field]);if(!isNaN(v)&&rows[i][field]!=null)return v;}return null;}
 function calcEfic(r){if(!r.dqo_eb_comp||!r.dqo_saida||r.dqo_eb_comp<=0)return null;return((r.dqo_eb_comp-r.dqo_saida)/r.dqo_eb_comp)*100;}
@@ -797,7 +800,8 @@ function setTab(name,el){
 
 // ALERTS 
 function renderAlerts(){
- const r=getLatest();
+ // ✅ CORREÇÃO: Usar getLatestAllData() para pegar o registro mais recente mesmo sem vazao_eb
+ const r=getLatestAllData();
  const ivl=r.ivl_calc||r.ivl;
  const dqo=getLastValid('dqo_saida');
  const sst=getLastValid('sst_efluente');
@@ -818,7 +822,8 @@ function renderAlerts(){
 
 // KPIs 
 function renderKPIs(){
- const r=getLatest();
+ // ✅ CORREÇÃO: Usar getLatestAllData() para pegar o registro mais recente
+ const r=getLatestAllData();
  const ivl=r.ivl_calc||r.ivl;
  const efic=calcEfic(r);
  const od=r.od_tanque;
@@ -857,7 +862,8 @@ function makeGauge(id,value,min,max,colorFn,has){
 }
 
 function renderGauges(){
- const r=getLatest();
+ // ✅ CORREÇÃO: Usar getLatestAllData() para pegar o registro mais recente
+ const r=getLatestAllData();
  const ivl=r.ivl_calc||r.ivl;
  const od=getLastValid('od_tanque');
  const idade=getLastValid('idade_lodo');
@@ -1347,6 +1353,12 @@ function submitForm(){
  const extras=sessionData.filter(r=>!HISTORICAL_DATA.find(h=>h.data===r.data));
  localStorage.setItem('ete_sess',JSON.stringify(extras));
  }catch(e){}
+ 
+ // ✅ CORREÇÃO: Notifica outras abas que dados foram atualizados
+ try{
+  bc.postMessage({type:'data_updated', sessionData:sessionData});
+ }catch(e){}
+ 
  showToast(' Registro salvo.','success');
  renderAll();
 }
@@ -1425,8 +1437,25 @@ function renderAll(){
  document.getElementById('last-update').textContent=latest.data?'Último: '+new Date(latest.data+'T00:00').toLocaleDateString('pt-BR')+' · '+total+' reg.':'';
  document.getElementById('base-count').textContent=total;
  updateLabels();
+ 
+ // ✅ CORREÇÃO: Renderiza SEMPRE os componentes principais (não apenas aba ativa)
+ renderKPIs();
+ renderAlerts();
+ renderGauges();
+ 
+ // E também renderiza a aba que está visível (gráficos, tabelas, etc)
  renderTab(activeTabName());
 }
+
+// BROADCAST CHANNEL — Sincroniza dados entre abas
+const bc = new BroadcastChannel('ete_dashboard_sync');
+bc.onmessage = (e) => {
+ if(e.data.type === 'data_updated'){
+  sessionData = e.data.sessionData;
+  renderAll();
+  console.log('✅ Dados sincronizados de outra aba');
+ }
+};
 
 // INIT 
 (async function(){
@@ -1439,11 +1468,11 @@ function renderAll(){
  updateLabels();
  renderAll();
  
- // AUTO-REFRESH: recarrega dados.json a cada 10s e atualiza a aba visível
+ // AUTO-REFRESH: recarrega dados.json a cada 3s (era 10s) e atualiza TODAS as abas
  setInterval(async ()=>{
   await loadDadosJson();
   renderAll();
- },10000);
+ },3000);
 })();
 </script>
 </body>
