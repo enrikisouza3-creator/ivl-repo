@@ -179,6 +179,13 @@ tr:hover td{background:rgba(255,255,255,.02);}
 .modal-actions{display:flex;gap:9px;justify-content:flex-end;}
 @media(max-width:900px){.charts-grid{grid-template-columns:1fr}.gauge-grid{grid-template-columns:1fr 1fr}.alerts-bar{grid-template-columns:1fr 1fr}}
 @media(max-width:600px){.kpi-grid{grid-template-columns:1fr 1fr}.gauge-grid{grid-template-columns:1fr}}
+/* Selector de período - Idade Lodo */
+.chip-label{position:relative;display:flex;align-items:center;justify-content:center;gap:4px;}
+.chip-label-text{display:block;}
+#idade-filter{background:transparent;border:none;color:var(--muted);font-size:.65rem;cursor:pointer;padding:0 3px;opacity:.5;transition:all .2s ease;appearance:none;-webkit-appearance:none;-moz-appearance:none;font-weight:500;font-family:inherit;}
+#idade-filter:hover,#idade-filter:focus{opacity:1;color:var(--text);}
+#idade-filter:focus{outline:1px solid var(--border);border-radius:3px;padding:0 4px;}
+#idade-filter option{background:var(--panel);color:var(--text);padding:6px 8px;border:none;}
 </style>
 </head>
 <body>
@@ -698,14 +705,15 @@ const HISTORICAL_DATA = [{"data": "2026-01-01", "vazao_eb": 2250.0, "ph_eb": 7.1
 
 // STATE & CONFIG 
 let sessionData = [...HISTORICAL_DATA];
+let idadeLodoFilterDays = 'ultimo'; // 'ultimo', 15, 10, 30, 90, 180, 365
 const DEF_CFG = {ivlMeta:150,ivlCrit:200,ivlMin:0,ivlMax:300,dqoMeta:180,dqoCrit:220,sstMeta:100,sstCrit:150,idadeMin:18,idadeMax:30,amMin:0.08,amMax:0.15,volReator:3200};
 let CFG = {...DEF_CFG};
-try{const s=localStorage.getItem('ete_cfg');if(s)CFG={...DEF_CFG,...JSON.parse(s)};}catch(e){}
-try{const sd=localStorage.getItem('ete_sess');if(sd){const ex=JSON.parse(sd);ex.forEach(r=>{if(!sessionData.find(x=>x.data===r.data))sessionData.push(r);});sessionData.sort((a,b)=>a.data.localeCompare(b.data));}}catch(e){}
+// localStorage removido — dados só em memória
+// localStorage removido — dados só em memória
 
 // DADOS.JSON - fonte externa atualizável sem reimplantar o site.
 // Registros do dados.json sobrescrevem os do HISTORICAL_DATA com a mesma "data";
-// o merge com localStorage (colar dados) roda de novo por cima, para não perder sessão local.
+// Dados são carregados de dados.json e em memória via sessionData.
 let dadosJsonInfo = null;
 async function loadDadosJson(){
  try{
@@ -720,17 +728,7 @@ async function loadDadosJson(){
  });
  sessionData.sort((a,b)=>a.data.localeCompare(b.data));
  }
- try{
- const sd=localStorage.getItem('ete_sess');
- if(sd){
- const ex=JSON.parse(sd);
- ex.forEach(r=>{
- const idx = sessionData.findIndex(x=>x.data===r.data);
- if(idx>=0) sessionData[idx]=r; else sessionData.push(r);
- });
- sessionData.sort((a,b)=>a.data.localeCompare(b.data));
- }
- }catch(e){}
+
  }catch(e){
  console.warn('Não foi possível carregar dados.json (usando dados embutidos):', e);
  }
@@ -759,6 +757,20 @@ function getLatestAllData(){const r=sessionData.filter(rec=>!rec.data||rec.data<
 function getLatest(){const r=getAll();return r[r.length-1]||{};}
 function getLastValid(field){const rows=getAll();for(let i=rows.length-1;i>=0;i--){const v=parseFloat(rows[i][field]);if(!isNaN(v)&&rows[i][field]!=null)return v;}return null;}
 function calcEfic(r){if(!r.dqo_eb_comp||!r.dqo_saida||r.dqo_eb_comp<=0)return null;return((r.dqo_eb_comp-r.dqo_saida)/r.dqo_eb_comp)*100;}
+
+function getIdadeLodoAverage(days){
+ const today=new Date();
+ const cutoffDate=new Date(today);
+ if(days!=='ultimo'){cutoffDate.setDate(today.getDate()-days);}
+ const cutoffStr=cutoffDate.toISOString().slice(0,10);
+ 
+ let rows=sessionData;
+ if(days!=='ultimo') rows=sessionData.filter(r=>r.data>=cutoffStr);
+ 
+ const values=rows.map(r=>parseFloat(r.idade_lodo)).filter(v=>!isNaN(v)&&v!=null);
+ if(values.length===0) return null;
+ return values.reduce((a,b)=>a+b,0)/values.length;
+}
 
 function sIVL(v){if(v==null)return{c:'',t:'—'};if(v<=CFG.ivlMeta)return{c:'ok',t:' OK'};if(v<=CFG.ivlCrit)return{c:'warn',t:' Alto'};return{c:'danger',t:' Crítico'};}
 function sDQO(v){if(v==null)return{c:'',t:'—'};if(v<=CFG.dqoMeta)return{c:'ok',t:' OK'};if(v<=CFG.dqoCrit)return{c:'warn',t:' Limite'};return{c:'danger',t:' Alto'};}
@@ -800,24 +812,40 @@ function setTab(name,el){
 
 // ALERTS 
 function renderAlerts(){
- // ✅ CORREÇÃO: Usar getLatestAllData() para pegar o registro mais recente mesmo sem vazao_eb
  const r=getLatestAllData();
  const ivl=r.ivl_calc||r.ivl;
  const dqo=getLastValid('dqo_saida');
  const sst=getLastValid('sst_efluente');
- const idade=getLastValid('idade_lodo');
+ const idade=getIdadeLodoAverage(idadeLodoFilterDays);
  const items=[
  {label:'IVL',...sIVL(ivl),val:ivl!=null?f1(ivl,0)+' mL/g':'—'},
  {label:'DQO Saída',...sDQO(dqo),val:dqo!=null?f1(dqo,0)+' mg/L':'—'},
  {label:'SST Efluente',...sSST(sst),val:sst!=null?f1(sst,0)+' mg/L':'—'},
- {label:'Idade Lodo',...sIdade(idade),val:idade!=null?f1(idade,1)+' dias':'—'},
+ {label:'Idade Lodo',...sIdade(idade),val:idade!=null?f1(idade,1)+' dias':'—',hasFilter:true},
  ];
  document.getElementById('alerts-bar').innerHTML=items.map(i=>`
  <div class="alert-chip ${i.c||'neutral'}">
- <div class="chip-label">${i.label}</div>
+ <div class="chip-label">
+  <span class="chip-label-text">${i.label}</span>
+  ${i.hasFilter?'<select id="idade-filter" onchange="updateIdadeFilter(this.value);renderAlerts();">
+   <option value="ultimo">Últimos dias</option>
+   <option value="15">15 dias</option>
+   <option value="10">10 dias</option>
+   <option value="30">30 dias</option>
+   <option value="90">3 meses</option>
+   <option value="180">6 meses</option>
+   <option value="365">1 ano</option>
+  </select>':''}
+ </div>
  <div class="chip-val">${i.val}</div>
  <div class="chip-badge">${i.t}</div>
  </div>`).join('');
+}
+
+function updateIdadeFilter(value){
+ idadeLodoFilterDays=isNaN(value)?value:parseInt(value);
+ const sel=document.getElementById('idade-filter');
+ if(sel) sel.value=value;
 }
 
 // KPIs 
@@ -1295,10 +1323,6 @@ function importFromPaste(){
  else{sessionData.push(rec);added++;}
  });
  sessionData.sort((a,b)=>a.data.localeCompare(b.data));
- try{
- const extras=sessionData.filter(r=>!HISTORICAL_DATA.find(h=>h.data===r.data));
- localStorage.setItem('ete_sess',JSON.stringify(extras));
- }catch(e){}
  showToast(` ${added} registro(s) adicionado(s) · ${updated} atualizado(s).`,'success');
  clearPaste();
  renderAll();
@@ -1349,10 +1373,6 @@ function submitForm(){
  const idx=sessionData.findIndex(r=>r.data===d);
  if(idx>=0)sessionData[idx]={...sessionData[idx],...rec};
  else{sessionData.push(rec);sessionData.sort((a,b)=>a.data.localeCompare(b.data));}
- try{
- const extras=sessionData.filter(r=>!HISTORICAL_DATA.find(h=>h.data===r.data));
- localStorage.setItem('ete_sess',JSON.stringify(extras));
- }catch(e){}
  
  // ✅ CORREÇÃO: Notifica outras abas que dados foram atualizados
  try{
@@ -1383,12 +1403,13 @@ function salvarConfigs(){
  CFG.amMin=+document.getElementById('cfg-am-min').value||0.08;
  CFG.amMax=+document.getElementById('cfg-am-max').value||0.15;
  CFG.volReator=+document.getElementById('cfg-vol-reator').value||3200;
- try{localStorage.setItem('ete_cfg',JSON.stringify(CFG));}catch(e){}
+ // localStorage removido — dados em memória
  updateLabels();renderAll();
  const fb=document.getElementById('cfg-feedback');if(fb){fb.textContent=' Aplicado!';setTimeout(()=>fb.textContent='',3000);}
 }
 function resetConfigs(){
- CFG={...DEF_CFG};try{localStorage.removeItem('ete_cfg');}catch(e){}
+ CFG={...DEF_CFG};
+ // localStorage removido — reset só em memória
  document.getElementById('cfg-ivl-meta').value=150;document.getElementById('cfg-ivl-crit').value=200;
  document.getElementById('cfg-ivl-min').value=0;document.getElementById('cfg-ivl-max').value=300;
  document.getElementById('cfg-dqo-meta').value=180;document.getElementById('cfg-dqo-crit').value=220;
@@ -1413,9 +1434,9 @@ function updateLabels(){
 function toggleTema(){
  const c=document.body.classList.toggle('light');
  document.getElementById('btn-tema').textContent=c?'️':'';
- try{localStorage.setItem('tema',c?'light':'dark');}catch(e){}
+ // localStorage removido — tema só durante sessão
 }
-(function(){try{if(localStorage.getItem('tema')==='light'){document.body.classList.add('light');window.addEventListener('load',()=>{const b=document.getElementById('btn-tema');if(b)b.textContent='️';});}}catch(e){}})();
+// localStorage removido — tema padrão é dark
 
 // TOAST 
 function showToast(msg,type='success'){
@@ -1468,11 +1489,8 @@ bc.onmessage = (e) => {
  updateLabels();
  renderAll();
  
- // AUTO-REFRESH: recarrega dados.json a cada 3s (era 10s) e atualiza TODAS as abas
- setInterval(async ()=>{
-  await loadDadosJson();
-  renderAll();
- },3000);
+ // AUTO-REFRESH REMOVIDO: dados só atualizam quando você lança um registro novo
+ // Se precisar recarregar dados.json, pode fazer manualmente com F5 ou botão de refresh
 })();
 </script>
 </body>
