@@ -827,7 +827,7 @@ function renderAlerts(){
  <div class="alert-chip ${i.c||'neutral'}">
  <div class="chip-label">
   <span class="chip-label-text">${i.label}</span>
-  ${i.hasFilter?'<select id="idade-filter" onchange="updateIdadeFilter(this.value);renderAlerts();">
+  ${i.hasFilter?`<select id="idade-filter" onchange="updateIdadeFilter(this.value);renderAlerts();">
    <option value="ultimo">Últimos dias</option>
    <option value="15">15 dias</option>
    <option value="10">10 dias</option>
@@ -835,7 +835,7 @@ function renderAlerts(){
    <option value="90">3 meses</option>
    <option value="180">6 meses</option>
    <option value="365">1 ano</option>
-  </select>':''}
+  </select>`:''}
  </div>
  <div class="chip-val">${i.val}</div>
  <div class="chip-badge">${i.t}</div>
