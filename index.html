@@ -27,6 +27,12 @@ header{background:linear-gradient(135deg,#0d2137,#0a1f2e,#091a27);border-bottom:
  border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;}
 header h1{font-family:'Syne',sans-serif;font-weight:800;font-size:1.2rem;}
 header .hsub{font-size:.74rem;color:var(--muted);}
+#btn-refresh{background:none;border:none;color:var(--accent);cursor:pointer;font-size:1.1rem;
+ display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:7px;
+ transition:all .2s;margin-left:auto;font-weight:600;}
+#btn-refresh:hover{background:rgba(0,212,170,.1);}
+#btn-refresh.spinning{animation:spin .6s linear;}
+@keyframes spin{100%{transform:rotate(360deg)}}
 .dot-live{display:inline-flex;align-items:center;gap:5px;background:rgba(35,209,96,.12);
  border:1px solid rgba(35,209,96,.3);border-radius:20px;padding:3px 10px;font-size:.7rem;color:var(--green);font-weight:600;}
 .dot-live::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 1.5s infinite;}
@@ -199,6 +205,7 @@ tr:hover td{background:rgba(255,255,255,.02);}
  <div style="display:flex;gap:10px;align-items:center;margin-left:auto;">
  <span class="dot-live">AO VIVO</span>
  <span id="last-update" style="font-size:.72rem;color:var(--muted);"></span>
+ <button id="btn-refresh" onclick="refreshDados()" title="Recarregar dados.json (Ctrl+R)" style="background:none;border:1px solid var(--border);color:var(--accent);border-radius:7px;padding:5px 11px;cursor:pointer;font-size:.9rem;font-weight:600;transition:all .2s;">⟳</button>
  <button id="btn-tema" onclick="toggleTema()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:7px;padding:5px 11px;cursor:pointer;font-size:.74rem;"></button>
  </div>
 </header>
@@ -1478,6 +1485,31 @@ bc.onmessage = (e) => {
  }
 };
 
+// REFRESH DADOS 
+async function refreshDados(){
+ const btn=document.getElementById('btn-refresh');
+ btn.classList.add('spinning');
+ try{
+  await loadDadosJson();
+  renderAll();
+  showToast('✓ Dados recarregados com sucesso','success');
+  console.log('✅ dados.json recarregado');
+ }catch(e){
+  showToast('✗ Erro ao recarregar dados','error');
+  console.error('Erro ao recarregar:',e);
+ }finally{
+  btn.classList.remove('spinning');
+ }
+}
+
+// HOTKEY Ctrl+R para refresh
+document.addEventListener('keydown',(e)=>{
+ if((e.ctrlKey||e.metaKey)&&e.key==='r'){
+  e.preventDefault();
+  refreshDados();
+ }
+});
+
 // INIT 
 (async function(){
  await loadDadosJson();
@@ -1489,8 +1521,8 @@ bc.onmessage = (e) => {
  updateLabels();
  renderAll();
  
- // AUTO-REFRESH REMOVIDO: dados só atualizam quando você lança um registro novo
- // Se precisar recarregar dados.json, pode fazer manualmente com F5 ou botão de refresh
+ // REFRESH: Use o botão ⟳ no header ou Ctrl+R para recarregar dados.json
+ // Os KPIs, Alerts e Gauges vão atualizar automaticamente
 })();
 </script>
 </body>
