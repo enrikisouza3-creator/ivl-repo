@@ -544,6 +544,7 @@ tr:hover td{background:rgba(255,255,255,.02);}
  <th onclick="sortTable('relacao_am')">A/M</th>
  <th>Efic. DQO</th>
  <th>Status IVL</th>
+ <th>Ações</th>
  </tr>
  </thead>
  <tbody id="table-body"></tbody>
@@ -1188,8 +1189,33 @@ function renderTable(){
  <td>${r.relacao_am&&r.relacao_am>0?f1(r.relacao_am,3):'—'}</td>
  <td class="${efic!=null&&efic<90?'cell-warn':''}">${efic!=null?fp(efic):'—'}</td>
  <td><span class="badge ${si.c}">${si.t}</span></td>
+ <td><button class="btn-sec" style="padding:4px 8px;" title="Excluir registro" onclick="confirmDelete('${r.data}')">🗑️</button></td>
  </tr>`;
  }).join('');
+}
+
+function confirmDelete(data){
+ document.getElementById('modal-container').innerHTML=`
+ <div class="modal-overlay" onclick="if(event.target===this)this.remove()">
+  <div class="modal">
+   <h3>Excluir registro</h3>
+   <p>Deseja excluir o registro de ${new Date(data+'T00:00').toLocaleDateString('pt-BR')}? Isso não pode ser desfeito.</p>
+   <div class="modal-actions">
+    <button class="btn-sec" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+    <button class="btn" onclick="deleteRecord('${data}')">Excluir</button>
+   </div>
+  </div>
+ </div>`;
+}
+function deleteRecord(data){
+ const idx=sessionData.findIndex(r=>r.data===data);
+ if(idx>=0){
+  sessionData.splice(idx,1);
+  renderAll();
+  bc.postMessage({type:'data_updated',sessionData});
+  showToast('✓ Registro excluído','success');
+ }
+ document.getElementById('modal-container').innerHTML='';
 }
 
 function exportCSV(){
@@ -1524,6 +1550,7 @@ document.addEventListener('keydown',(e)=>{
  
  // REFRESH: Use o botão ⟳ no header ou Ctrl+R para recarregar dados.json
  // Os KPIs, Alerts e Gauges vão atualizar automaticamente
+ setInterval(async()=>{try{await loadDadosJson();renderAll();}catch(e){console.warn('auto-refresh falhou',e);}},300000);
 })();
 </script>
 </body>
