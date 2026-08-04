@@ -765,7 +765,7 @@ function getLatestAllData(){
   const hoje = new Date().toISOString().slice(0,10);
   const validos = sessionData.filter(r => r.data <= hoje);
   return validos[validos.length-1] || sessionData[sessionData.length-1] || {};
-};}
+}
 function getLatest(){const r=getAll();return r[r.length-1]||{};}
 function getLastValid(field){const rows=getAll();for(let i=rows.length-1;i>=0;i--){const v=parseFloat(rows[i][field]);if(!isNaN(v)&&rows[i][field]!=null)return v;}return null;}
 function calcEfic(r){if(!r.dqo_eb_comp||!r.dqo_saida||r.dqo_eb_comp<=0)return null;return((r.dqo_eb_comp-r.dqo_saida)/r.dqo_eb_comp)*100;}
