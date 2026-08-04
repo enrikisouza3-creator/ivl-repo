@@ -725,20 +725,33 @@ let CFG = {...DEF_CFG};
 let dadosJsonInfo = null;
 async function loadDadosJson(){
  try{
+ // Tenta carregar do backend primeiro
+ const resp = await fetch('/api/dados', {cache:'no-store'});
+ if(!resp.ok) throw new Error('Backend não respondeu');
+ const j = await resp.json();
+ dadosJsonInfo = j;
+ if(Array.isArray(j.registros) && j.registros.length){
+ sessionData = [];
+ j.registros.forEach(r=>{sessionData.push(r);});
+ sessionData.sort((a,b)=>a.data.localeCompare(b.data));
+ console.log('✅ Dados carregados do backend:', sessionData.length, 'registros');
+ }
+ }catch(e){
+ console.warn('Backend indisponível, tentando dados.json local:', e.message);
+ try{
  const resp = await fetch('dados.json', {cache:'no-store'});
  if(!resp.ok) return;
  const j = await resp.json();
  dadosJsonInfo = j;
- if(Array.isArray(j.dados) && j.dados.length){
- j.dados.forEach(r=>{
- const idx = sessionData.findIndex(x=>x.data===r.data);
- if(idx>=0) sessionData[idx]=r; else sessionData.push(r);
- });
+ if(Array.isArray(j.registros) && j.registros.length){
+ sessionData = [];
+ j.registros.forEach(r=>{sessionData.push(r);});
  sessionData.sort((a,b)=>a.data.localeCompare(b.data));
+ console.log('✅ Dados carregados de dados.json:', sessionData.length, 'registros');
  }
-
- }catch(e){
- console.warn('Não foi possível carregar dados.json (usando dados embutidos):', e);
+ }catch(e2){
+ console.error('Erro carregando dados:', e2);
+ }
  }
 }
 
@@ -1391,7 +1404,7 @@ document.getElementById('f-dqo_saida')?.addEventListener('input',autoCalcEfic);
 
 function nv(id){const v=document.getElementById(id)?.value;return(v===''||v==null)?null:parseFloat(v)||null;}
 
-function submitForm(){
+async function submitForm(){
  const d=document.getElementById('f-data').value;
  if(!d){showToast('Data é obrigatória.','error');return;}
  const fieldIds=['vazao_eb','ph_eb','dqo_eb_comp','dqo_eb_kg','eb1','eb2','eb3','eb4','eb5','eb6','eb7','eb8',
@@ -1412,12 +1425,19 @@ function submitForm(){
  if(idx>=0)sessionData[idx]={...sessionData[idx],...rec};
  else{sessionData.push(rec);sessionData.sort((a,b)=>a.data.localeCompare(b.data));}
  
- // ✅ CORREÇÃO: Notifica outras abas que dados foram atualizados
+ // ✅ Salvar no backend (Node.js)
  try{
-  bc.postMessage({type:'data_updated', sessionData:sessionData});
- }catch(e){}
+  const res=await fetch('/api/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rec)});
+  if(!res.ok) throw new Error('Erro ao salvar no backend');
+  // ✅ Notifica outras abas que dados foram atualizados
+  try{bc.postMessage({type:'data_updated', sessionData:sessionData});}catch(e){}
+  showToast(' Registro salvo.','success');
+ }catch(e){
+  console.error('Erro salvando:',e);
+  showToast('✗ Erro ao salvar no servidor','error');
+  return;
+ }
  
- showToast(' Registro salvo.','success');
  renderAll();
 }
 
