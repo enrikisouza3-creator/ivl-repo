@@ -7,6 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap');
 :root{
@@ -217,6 +218,7 @@ tr:hover td{background:rgba(255,255,255,.02);}
  <button onclick="setTab('eficiencia',this)"> Eficiência</button>
  <button onclick="setTab('historico',this)"> Histórico</button>
  <button onclick="setTab('lancamento',this)">️ Lançamento</button>
+ <button onclick="setTab('relatorio',this)"> Relatório</button>
  <button onclick="setTab('configuracoes',this)">️ Limites</button>
 </nav>
 
@@ -671,6 +673,18 @@ tr:hover td{background:rgba(255,255,255,.02);}
  </div>
 </div>
 
+<!-- ===== RELATÓRIO — ANÁLISE DE CAUSA RAIZ ===== -->
+<div id="tab-relatorio" class="tab-content dash">
+ <div class="section-title"> Relatório — Análise de Causa Raiz</div>
+ <div class="chart-filter" style="margin-bottom:16px;">
+  <label>De</label><input type="date" id="rel-de">
+  <label>Até</label><input type="date" id="rel-ate">
+  <button class="cfbtn" onclick="renderRelatorio()">Gerar</button>
+  <span class="cfstats" id="rel-stats"></span>
+ </div>
+ <div id="rel-content" class="form-wrap" style="max-width:100%;line-height:1.55;"></div>
+</div>
+
 <!-- ===== CONFIGURAÇÕES ===== -->
 <div id="tab-configuracoes" class="tab-content dash">
  <div class="section-title">️ Limites e Metas</div>
@@ -719,11 +733,45 @@ let CFG = {...DEF_CFG};
 // localStorage removido — dados só em memória
 // localStorage removido — dados só em memória
 
+// SUPABASE — preencha com a URL e a chave "anon/public" do seu projeto
+// (Configurações do projeto > API, no painel do Supabase).
+// NUNCA coloque a chave "service_role" aqui: ela dá acesso total ao banco e
+// não pode ficar exposta em código que roda no navegador do usuário. Use a
+// chave anon, e controle o acesso via Row Level Security (RLS) na tabela.
+const SUPABASE_URL = 'https://maljtjznorewdntctaub.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hbGp0anpub3Jld2RudGN0YXViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwMzYxNTYsImV4cCI6MjA5NDYxMjE1Nn0.Jt_Nup-bR62gp5ZrOrVPIujanQbRIKZB6CC0CmiB8WY';
+const SUPABASE_TABLE = 'registros_ete';
+let supa = null;
+function initSupabase(){
+ if(supa) return supa;
+ if(!SUPABASE_URL.includes('supabase.co') || SUPABASE_ANON_KEY.includes('AQUI')) return null;
+ try{
+  supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  console.log('✅ Supabase configurado');
+ }catch(e){ console.warn('Supabase indisponível:', e.message); supa=null; }
+ return supa;
+}
+
 // DADOS.JSON - fonte externa atualizável sem reimplantar o site.
 // Registros do dados.json sobrescrevem os do HISTORICAL_DATA com a mesma "data";
 // Dados são carregados de dados.json e em memória via sessionData.
 let dadosJsonInfo = null;
 async function loadDadosJson(){
+ // 1) Supabase, se configurado
+ const cli = initSupabase();
+ if(cli){
+  try{
+   const {data, error} = await cli.from(SUPABASE_TABLE).select('*').order('data', {ascending:true});
+   if(error) throw error;
+   if(Array.isArray(data) && data.length){
+    sessionData = data.sort((a,b)=>a.data.localeCompare(b.data));
+    console.log('✅ Dados carregados do Supabase:', sessionData.length, 'registros');
+    return;
+   }
+  }catch(e){
+   console.warn('Supabase indisponível, tentando backend/local:', e.message);
+  }
+ }
  try{
  // Tenta carregar do backend primeiro
  const resp = await fetch('/api/dados', {cache:'no-store'});
@@ -804,6 +852,142 @@ function sSST(v){if(v==null)return{c:'',t:'—'};if(v<=CFG.sstMeta)return{c:'ok'
 function sIdade(v){if(v==null||isNaN(v))return{c:'',t:'—'};if(v>=CFG.idadeMin&&v<=CFG.idadeMax)return{c:'ok',t:' Ideal'};if(v<CFG.idadeMin)return{c:'warn',t:' Baixo'};return{c:'warn',t:' Alto'};}
 function sAM(v){if(v==null)return{c:'',t:'—'};if(v>=CFG.amMin&&v<=CFG.amMax)return{c:'ok',t:' Ideal'};if(v<CFG.amMin)return{c:'warn',t:' Baixo'};return{c:'warn',t:' Alto'};}
 
+// RELATÓRIO — ANÁLISE DE CAUSA RAIZ 
+// Motor de regras simples: cruza médias/entradas fora de faixa do período com
+// padrões conhecidos de operação de ETE (bulking, choque de carga, sobrecarga
+// de gordura no DAF, deficit de OD etc.) e sugere causa provável + ação.
+function avgField(rows, field){
+ const vals=rows.map(r=>parseFloat(r[field])).filter(v=>!isNaN(v)&&v!=null);
+ if(!vals.length) return null;
+ return vals.reduce((a,b)=>a+b,0)/vals.length;
+}
+function pctOutOfSpec(rows, field, statusFn){
+ const vals=rows.filter(r=>r[field]!=null && !isNaN(parseFloat(r[field])));
+ if(!vals.length) return null;
+ const bad=vals.filter(r=>{const s=statusFn(parseFloat(r[field]));return s.c==='warn'||s.c==='danger';});
+ return (bad.length/vals.length)*100;
+}
+function trendLabel(rows, field){
+ const vals=rows.filter(r=>r[field]!=null).map(r=>parseFloat(r[field]));
+ if(vals.length<4) return null;
+ const meio=Math.floor(vals.length/2);
+ const m1=vals.slice(0,meio).reduce((a,b)=>a+b,0)/meio;
+ const m2=vals.slice(meio).reduce((a,b)=>a+b,0)/(vals.length-meio);
+ const delta=m2-m1;
+ if(Math.abs(delta)<Math.abs(m1)*0.05) return {dir:'estável', delta};
+ return {dir: delta>0?'subindo':'caindo', delta};
+}
+function gerarCausaRaiz(rows){
+ const achados=[]; // {titulo, texto}
+ const causas=[]; // {causa, evidencia, acoes:[]}
+ if(!rows.length) return {achados,causas,vazio:true};
+
+ const ivl=avgField(rows,'ivl_calc')??avgField(rows,'ivl');
+ const dqoSaida=avgField(rows,'dqo_saida');
+ const sstEfl=avgField(rows,'sst_efluente');
+ const idade=avgField(rows,'idade_lodo');
+ const am=avgField(rows,'relacao_am');
+ const od=avgField(rows,'od_tanque');
+ const phTanque=avgField(rows,'ph_tanque');
+ const tempTanque=avgField(rows,'temp_tanque');
+ const ogFlot=avgField(rows,'oleos_graxas_flot');
+ const eficBio=avgField(rows.map(r=>({e:calcEfic(r)})),'e');
+ const ivlTrend=trendLabel(rows,'ivl_calc');
+ const dqoTrend=trendLabel(rows,'dqo_saida');
+
+ // ACHADOS — panorama descritivo do período
+ if(ivl!=null) achados.push({t:'IVL médio', v:`${f1(ivl,0)} mL/g (${sIVL(ivl).t.trim()})${ivlTrend?` — tendência ${ivlTrend.dir}`:''}`});
+ if(dqoSaida!=null) achados.push({t:'DQO Saída média', v:`${f1(dqoSaida,0)} mg/L (${sDQO(dqoSaida).t.trim()})${dqoTrend?` — tendência ${dqoTrend.dir}`:''}`});
+ if(sstEfl!=null) achados.push({t:'SST Efluente médio', v:`${f1(sstEfl,0)} mg/L (${sSST(sstEfl).t.trim()})`});
+ if(idade!=null) achados.push({t:'Idade do Lodo média', v:`${f1(idade,1)} dias (${sIdade(idade).t.trim()})`});
+ if(am!=null) achados.push({t:'Relação A/M média', v:`${f1(am,3)} (${sAM(am).t.trim()})`});
+ if(od!=null) achados.push({t:'OD Tanque médio', v:`${f1(od,1)} mg/L`});
+ if(eficBio!=null) achados.push({t:'Eficiência DQO (biológico)', v:`${fp(eficBio)}`});
+
+ // REGRAS DE CAUSA RAIZ
+ const ivlAlto = ivl!=null && ivl>CFG.ivlMeta;
+ if(ivlAlto && am!=null && am>CFG.amMax){
+  causas.push({causa:'Sobrecarga orgânica (excesso de carga / biomassa insuficiente para a DQO recebida)',
+   evidencia:`IVL médio ${f1(ivl,0)} mL/g acima da meta (${CFG.ivlMeta}) e A/M médio ${f1(am,3)} acima do máximo recomendado (${CFG.amMax}).`,
+   acoes:['Avaliar aumento da idade do lodo (reduzir descarte) para elevar a biomassa disponível.','Verificar picos de vazão/DQO na entrada que possam estar gerando choques de carga.','Monitorar SST do tanque de aeração para confirmar se a concentração de biomassa está adequada ao volume do reator.']});
+ }
+ if(ivlAlto && idade!=null && idade<CFG.idadeMin){
+  causas.push({causa:'Lodo jovem — decantabilidade prejudicada (bulking associado a idade de lodo baixa)',
+   evidencia:`Idade do lodo média de ${f1(idade,1)} dias, abaixo do mínimo recomendado (${CFG.idadeMin}), coincidindo com IVL elevado.`,
+   acoes:['Reduzir a taxa de descarte de lodo para aumentar gradualmente a idade do lodo.','Acompanhar o IVL diariamente após o ajuste — resposta costuma levar alguns dias (tempo de retenção celular).']});
+ }
+ if(ivlAlto && idade!=null && idade>CFG.idadeMax){
+  causas.push({causa:'Lodo envelhecido — possível bulking filamentoso por idade excessiva ou desnitrificação no decantador',
+   evidencia:`Idade do lodo média de ${f1(idade,1)} dias, acima do máximo recomendado (${CFG.idadeMax}), coincidindo com IVL elevado.`,
+   acoes:['Aumentar a taxa de descarte de lodo para reduzir a idade média.','Verificar formação de bolhas de N2 e subida de lodo no decantador (sinal de desnitrificação).']});
+ }
+ if(od!=null && od<1.5){
+  causas.push({causa:'Deficit de oxigênio dissolvido no tanque de aeração — favorece bactérias filamentosas',
+   evidencia:`OD médio de ${f1(od,1)} mg/L, abaixo do recomendado (~2,0 mg/L) para evitar seleção de filamentosas.`,
+   acoes:['Verificar capacidade/funcionamento dos sopradores e difusores de ar.','Reavaliar distribuição de ar entre os tanques/câmaras, especialmente em picos de carga.']});
+ }
+ if(dqoSaida!=null && dqoSaida>CFG.dqoMeta && eficBio!=null && eficBio<90){
+  causas.push({causa:'Queda de eficiência biológica — possível choque de carga ou efeito tóxico/inibidor sobre a biomassa',
+   evidencia:`DQO de saída média ${f1(dqoSaida,0)} mg/L acima da meta (${CFG.dqoMeta}) com eficiência de remoção de ${fp(eficBio)}.`,
+   acoes:['Verificar histórico de dosagem de sanitizantes (ex.: ácido peracético) e possível residual chegando ao biológico.','Checar OD e pH no período do desvio — inibição costuma vir acompanhada de queda de OD ou pH fora da faixa.','Cruzar com dados de vazão/DQO de entrada para identificar picos de carga coincidentes.']});
+ }
+ if(sstEfl!=null && sstEfl>CFG.sstMeta && !ivlAlto){
+  causas.push({causa:'Arraste de sólidos no decantador sem indício de bulking (IVL dentro da meta)',
+   evidencia:`SST efluente médio ${f1(sstEfl,0)} mg/L acima da meta (${CFG.sstMeta}) enquanto o IVL está normal.`,
+   acoes:['Verificar vazão de retorno de lodo e possível curto-circuito hidráulico no decantador.','Inspecionar raspadores/skimmers e uniformidade da distribuição de vazão na entrada do decantador.']});
+ }
+ if(ogFlot!=null && ogFlot>65){
+  causas.push({causa:'Sobrecarga de óleos e graxas no flotador (DAF)',
+   evidencia:`Óleos e graxas médios no flotador de ${f1(ogFlot,1)} mg/L, valor elevado para a operação do DAF.`,
+   acoes:['Verificar dosagem de coagulante/polímero no pré-tratamento.','Investigar possível lançamento pontual de gordura por alguma linha de processo/CIP.']});
+ }
+ if(phTanque!=null && (phTanque<6.5 || phTanque>8.5)){
+  causas.push({causa:'pH do tanque de aeração fora da faixa ideal para nitrificação/atividade biológica',
+   evidencia:`pH médio do tanque de ${f1(phTanque,2)}, fora da faixa usual 6,5–8,5.`,
+   acoes:['Verificar estabilidade do pH na neutralização a montante.','Avaliar se há necessidade de correção de alcalinidade no biológico.']});
+ }
+ if(tempTanque!=null){
+  const tTrend=trendLabel(rows,'temp_tanque');
+  if(tTrend && tTrend.dir!=='estável' && Math.abs(tTrend.delta)>=2){
+   achados.push({t:'Temperatura do Tanque', v:`Tendência ${tTrend.dir} (Δ≈${f1(Math.abs(tTrend.delta),1)}°C entre a 1ª e a 2ª metade do período) — pode influenciar a atividade biológica.`});
+  }
+ }
+
+ if(!causas.length){
+  causas.push({causa:'Nenhum desvio relevante identificado nas regras avaliadas',
+   evidencia:'Os principais parâmetros (IVL, DQO de saída, SST efluente, idade do lodo, A/M, OD) estão dentro ou próximos das metas configuradas.',
+   acoes:['Manter a rotina atual de monitoramento e os ajustes finos já praticados.','Revisar periodicamente os limites em "Limites" conforme a operação evoluir.']});
+ }
+ return {achados,causas,vazio:false};
+}
+function renderRelatorio(){
+ const de=document.getElementById('rel-de').value, ate=document.getElementById('rel-ate').value;
+ const rows=getRows(de,ate);
+ document.getElementById('rel-stats').textContent = rows.length? `${rows.length} registro(s) no período` : '';
+ const {achados,causas,vazio}=gerarCausaRaiz(rows);
+ const el=document.getElementById('rel-content');
+ if(vazio){
+  el.innerHTML='<p style="color:var(--muted);">Sem registros no período selecionado. Ajuste as datas e clique em "Gerar".</p>';
+  return;
+ }
+ el.innerHTML=`
+ <h3 style="font-family:'Syne',sans-serif;margin-bottom:10px;"> Panorama do período</h3>
+ <div class="kpi-grid" style="margin-bottom:22px;">
+  ${achados.map(a=>`<div class="kpi"><div class="kpi-label">${a.t}</div><div style="font-size:.85rem;margin-top:4px;">${a.v}</div></div>`).join('')}
+ </div>
+ <h3 style="font-family:'Syne',sans-serif;margin-bottom:10px;"> Prováveis causas e ações recomendadas</h3>
+ ${causas.map((c,i)=>`
+  <div style="border:1px solid var(--border);border-radius:11px;padding:14px 16px;margin-bottom:12px;background:var(--panel2);">
+   <div style="font-weight:700;margin-bottom:5px;">${i+1}. ${c.causa}</div>
+   <div style="font-size:.8rem;color:var(--muted);margin-bottom:8px;"><em>Evidência:</em> ${c.evidencia}</div>
+   <div style="font-size:.82rem;"><strong>Ações sugeridas:</strong>
+    <ul style="margin:6px 0 0 18px;">${c.acoes.map(a=>`<li style="margin-bottom:3px;">${a}</li>`).join('')}</ul>
+   </div>
+  </div>`).join('')}
+ <p style="font-size:.72rem;color:var(--muted);margin-top:10px;">Relatório gerado automaticamente por regras baseadas nos limites configurados em "Limites". Use como apoio ao diagnóstico — a validação final é sempre do responsável técnico.</p>
+ `;
+}
+
 // TABS 
 // Renderiza tudo que pertence à aba indicada. Usada tanto ao trocar de aba quanto
 // (via renderAll) sempre que os dados mudam (colar/salvar), para a aba que
@@ -817,6 +1001,7 @@ const TAB_RENDERERS = {
  eficiencia(){renderEficSummary();['efic','dqocmp','eficflot'].forEach(k=>rebuildChart(k));},
  historico(){renderTable();},
  lancamento(){},
+ relatorio(){renderRelatorio();},
  configuracoes(){},
 };
 function activeTabName(){
@@ -1224,10 +1409,15 @@ function confirmDelete(data){
   </div>
  </div>`;
 }
-function deleteRecord(data){
+async function deleteRecord(data){
  const idx=sessionData.findIndex(r=>r.data===data);
  if(idx>=0){
   sessionData.splice(idx,1);
+  const cli = initSupabase();
+  if(cli){
+   try{ await cli.from(SUPABASE_TABLE).delete().eq('data', data); }
+   catch(e){ console.warn('Erro excluindo no Supabase:', e.message); }
+  }
   renderAll();
   bc.postMessage({type:'data_updated',sessionData});
   showToast('✓ Registro excluído','success');
@@ -1425,16 +1615,23 @@ async function submitForm(){
  if(idx>=0)sessionData[idx]={...sessionData[idx],...rec};
  else{sessionData.push(rec);sessionData.sort((a,b)=>a.data.localeCompare(b.data));}
  
- // ✅ Salvar no backend (Node.js)
+ // ✅ Salvar — Supabase primeiro, senão backend Node.js
+ const cli = initSupabase();
  try{
-  const res=await fetch('/api/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rec)});
-  if(!res.ok) throw new Error('Erro ao salvar no backend');
+  if(cli){
+   const {error} = await cli.from(SUPABASE_TABLE).upsert(rec, {onConflict:'data'});
+   if(error) throw error;
+  }else{
+   const res=await fetch('/api/salvar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rec)});
+   if(!res.ok) throw new Error('Erro ao salvar no backend');
+  }
   // ✅ Notifica outras abas que dados foram atualizados
   try{bc.postMessage({type:'data_updated', sessionData:sessionData});}catch(e){}
   showToast(' Registro salvo.','success');
+  if(document.getElementById('tab-relatorio')?.classList.contains('active')) renderRelatorio();
  }catch(e){
   console.error('Erro salvando:',e);
-  showToast('✗ Erro ao salvar no servidor','error');
+  showToast('✗ Erro ao salvar'+(cli?' no Supabase':' no servidor'),'error');
   return;
  }
  
@@ -1569,6 +1766,8 @@ document.addEventListener('keydown',(e)=>{
  document.querySelectorAll('input[type=date][id$="-ate"]').forEach(el=>{if(!el.value)el.value=ld;});
  const fde=document.getElementById('filt-de'),fate=document.getElementById('filt-ate');
  if(fde&&!fde.value)fde.value=ms;if(fate&&!fate.value)fate.value=ld;
+ const rde=document.getElementById('rel-de'),rate=document.getElementById('rel-ate');
+ if(rde&&!rde.value)rde.value=ms;if(rate&&!rate.value)rate.value=ld;
  updateLabels();
  renderAll();
  
