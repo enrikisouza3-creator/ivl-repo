@@ -1054,9 +1054,12 @@ function renderAlerts(){
 }
 
 function updateIdadeFilter(value){
- idadeLodoFilterDays=isNaN(value)?value:parseInt(value);
- const sel=document.getElementById('idade-filter');
- if(sel) sel.value=value;
+  idadeLodoFilterDays = isNaN(value) ? value : parseInt(value);
+  const sel = document.getElementById('idade-filter');
+  if(sel) sel.value = value;
+  
+  // ✅ FIX: Re-renderizar alertas
+  renderAlerts()
 }
 
 // KPIs 
